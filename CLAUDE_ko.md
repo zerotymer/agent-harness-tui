@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-1단계를 진행 중입니다. 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 Rust TUI(Ratatui + Crossterm)의 명세(SDD)와, 이를 구현하는 Rust 크레이트 `agent-harness-tui`가 들어 있습니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
+1단계 구현을 마쳤고 사용자 인수를 기다리는 중입니다(`docs/STAGE1_REPORT_ko.md` 참고). 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 Rust TUI(Ratatui + Crossterm)의 명세(SDD)와, 이를 구현하는 Rust 크레이트 `agent-harness-tui`가 들어 있습니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
 
 - 빌드: `cargo build`
 - 테스트: `cargo test` (테스트는 임시 디렉터리에 대상 프로젝트를 만들어 검증합니다)
@@ -13,6 +13,7 @@
 
 - `README.md` / `README_ko.md`: 목적, 설계 결정, 구현 전에 다시 확인해야 할 공식 출처.
 - `references/STEP_1_INITIAL_CREATION*.md`: 1단계, 초기 하네스 생성.
+- `docs/USAGE*.md`: 설치와 사용. `docs/STAGE1_REPORT*.md`: 1단계 검증 보고.
 - `references/STEP_2_ADDITIONAL_FEATURES*.md`: 2단계, 범위가 정해진 업데이터, 오버라이드 계층, 모드, 훅, Git worktree/Worktrunk/Docktree 지원.
 
 명세가 기준입니다. 가져온 스킬이 명세나 다른 스킬과 충돌하면, 필요한 경우 사용자에게 확인한 뒤 명세(두 언어 모두)나 `.skills/`의 로컬 스킬 사본을 고칩니다. 로컬 스킬을 고쳤다면 그 스킬의 `source.json`에 있는 `localChanges`에 기록합니다. 위키 원문은 절대 수정하지 않습니다. 원문이 바뀌면 사용자가 알려주며, 다시 가져올 때는 로컬 수정을 다시 적용해야 합니다.

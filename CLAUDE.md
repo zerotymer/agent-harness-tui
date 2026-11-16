@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Stage 1 is in progress: the repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
+Stage 1 is implemented and awaiting the user's acceptance (see `docs/STAGE1_REPORT.md`). The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
 
 - Build: `cargo build`
 - Test: `cargo test` (tests build target projects in temporary directories)
@@ -13,6 +13,7 @@ Stage 1 is in progress: the repo holds the spec (SDD) for a standalone Rust TUI 
 
 - `README.md` / `README_ko.md`: purpose, design decisions, and official sources to re-check before implementing.
 - `references/STEP_1_INITIAL_CREATION*.md`: Stage 1, which covers initial harness creation.
+- `docs/USAGE*.md`: install and usage. `docs/STAGE1_REPORT*.md`: Stage 1 verification report.
 - `references/STEP_2_ADDITIONAL_FEATURES*.md`: Stage 2, which covers the bounded updater, override layers, modes, hooks, and Git worktree/Worktrunk/Docktree support.
 
 The spec is the source of truth. When an imported skill conflicts with the spec or with another skill, check with the user if needed, then fix the spec (both languages) or the local skill copy in `.skills/`. Record any local skill edit in that skill's `source.json` `localChanges`. Never edit the wiki originals; the user reports upstream changes, and a refresh must re-apply the local edits.

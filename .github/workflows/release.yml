@@ -1,0 +1,85 @@
+# Release for agent-harness-tui (instruction 0014).
+# Pushing a `v*` tag that matches Cargo.toml builds Linux, Windows and macOS
+# binaries and publishes them with SHA256SUMS as a GitHub Release.
+# Official actions only, pinned to commit SHAs (tag in the trailing comment).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Toolchain
+        run: rustup toolchain install
+
+      - name: Tag matches Cargo.toml
+        run: |
+          version=$(cargo pkgid | sed 's/.*[#@]//')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Release build
+        run: cargo build --release --locked
+
+      - name: Package
+        run: |
+          name="agent-harness-tui-${GITHUB_REF_NAME}-${RUNNER_OS}-${RUNNER_ARCH}"
+          mkdir dist
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z a "dist/$name.zip" ./target/release/agent-harness-tui.exe
+          else
+            tar -czf "dist/$name.tar.gz" -C target/release agent-harness-tui
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ runner.os }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # only this job may create the release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum -- * > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --generate-notes ./*

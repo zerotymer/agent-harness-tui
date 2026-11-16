@@ -6,6 +6,8 @@
 
 ## 설치
 
+Linux·Windows·macOS용 실행 파일은 GitHub Release마다 올라간다(`.tar.gz`, Windows는 `.zip`). 함께 올라가는 `SHA256SUMS`로 파일을 확인할 수 있다. 또는 소스에서 빌드한다:
+
 필요 조건: 안정 버전 Rust 툴체인. 1단계는 Rust 1.97.1, edition 2024로 빌드·테스트했다.
 
 ```sh

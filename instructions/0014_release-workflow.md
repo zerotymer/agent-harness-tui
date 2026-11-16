@@ -1,0 +1,26 @@
+# 0014 — 릴리스 자동 등록 (태그 기반 GitHub Release)
+
+> Entity UUID: 01a1e6bc-e798-75bf-8479-34010d74b53b   (로컬 생성, UUIDv7)
+> Status: IN_PROGRESS
+> Branch: `feature/release-workflow/01a1e6bc`
+> 근거: 사용자 요청 (2026-11-17) "자동으로 릴리즈 등록안되는데 확인해줘" → 0012에서 제외했던 릴리스 생성을 추가
+
+## 목표
+`v*` 태그를 push하면 세 OS 실행 파일을 빌드해 GitHub Release로 자동 등록한다.
+
+## 범위
+- 포함:
+  - `.github/workflows/release.yml`: `v*` 태그 push에서만 실행
+  - 태그와 `Cargo.toml` 버전이 다르면 실패
+  - 세 OS에서 테스트·release 빌드, 압축(Linux·macOS `.tar.gz`, Windows `.zip`, 파일 이름에 태그·OS·아키텍처)
+  - `SHA256SUMS`와 함께 `gh release create --verify-tag --generate-notes`로 게시
+  - 공식 `actions/*`만 커밋 SHA로 고정, `contents: write`는 게시 작업에만
+  - 문서: `CLAUDE.md`(영/한) 릴리스 방법, `docs/USAGE*.md` 설치 안내
+  - 0013 머지에서 빠진 보고서 갱신 커밋(`fa101ab`) 반영
+- 제외: 코드 서명·공증, 크로스 컴파일 타깃 추가, 사전 릴리스(prerelease) 구분, 패키지 관리자 배포
+
+## 완료 기준 (DoD)
+- [ ] 태그 push로 릴리스가 세 OS 파일과 `SHA256SUMS`를 담아 생성됨 (사용자가 태그를 push해 확인)
+- [ ] 테스트 제외 사유: 워크플로 설정은 실행 결과로 검증
+- [ ] 브랜치에서 작업하고 PR 준비 (main 직접 push 금지)
+- [ ] 완료는 사용자가 명시적으로 선언한다

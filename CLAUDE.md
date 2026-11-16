@@ -12,6 +12,7 @@ Stage 1 is implemented and awaiting the user's acceptance (see `docs/STAGE1_REPO
 - Format: `cargo fmt --check`
 - Toolchain: pinned in `rust-toolchain.toml` (Rust 1.97.1 with rustfmt and clippy).
 - CI: `.github/workflows/ci.yml` runs clippy, tests and a release build on Linux, Windows and macOS (fmt on Linux) for pull requests and pushes to `main`, and uploads the binaries as workflow artifacts. Actions are official `actions/*` only, pinned to commit SHAs.
+- Release: pushing a `v*` tag that matches the `Cargo.toml` version (for example `git tag v0.1.0 && git push origin v0.1.0`) runs `.github/workflows/release.yml`, which tests and builds on the three OSes and publishes the binaries with `SHA256SUMS` as a GitHub Release. Only its publish job gets `contents: write`.
 
 - `README.md` / `README_ko.md`: purpose, design decisions, and official sources to re-check before implementing.
 - `references/STEP_1_INITIAL_CREATION*.md`: Stage 1, which covers initial harness creation.

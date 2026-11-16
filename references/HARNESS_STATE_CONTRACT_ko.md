@@ -8,6 +8,7 @@
 | `harness.lock.json` | 확정된 가져오기: 소스·ref, 파일 목록, 해시 | 포함 |
 | `.harness/state.json` | 마지막 성공 적용, 소유권, 기준 해시, 배치, 어댑터 | 제외 |
 | `.harness/backups/<apply-id>/<path>` | 도구가 변경한 각 파일의 적용 전 사본 | 제외 |
+| `.harness/apply.lock` | 적용 중에만 존재한다. 남아 있으면 사용자가 지울 때까지 적용을 막는다 | 제외 |
 
 ## 공통 규칙
 
@@ -101,7 +102,7 @@ ref = "local-one"           # 로컬 소스 기준 상대 디렉터리
   "last_success": { "id": "20261116-140000", "at": "2026-11-16T14:00:00+09:00", "tool_version": "0.1.0" },
   "managed": [
     { "path": "CLAUDE.md", "block": "agent-harness", "hash": "sha256:…" },
-    { "path": "instructions/completed.log", "hash": "sha256:…" }
+    { "path": ".skills/wiki-skill-import/SKILL.md", "hash": "sha256:…" }
   ],
   "deployments": [
     { "skill": "wiki-skill-import", "agent": "claude-code", "placement": "copy",
@@ -111,8 +112,8 @@ ref = "local-one"           # 로컬 소스 기준 상대 디렉터리
 }
 ```
 
-- **`last_success`**: 계획한 쓰기가 모두 성공한 뒤에만 기록한다. `id`는 백업 디렉터리 이름으로도 쓴다. `at`은 오프셋을 포함한 RFC 3339 시각이다.
-- **`managed`**: 소유권을 기록한다. `block`이 없는 항목은 도구가 파일 전체를 소유한다는 뜻이다. `block`이 있는 항목은 도구가 해당 관리 블록만 소유한다는 뜻이고, 파일의 나머지는 사용자 소유다. 한 경로를 두 방식으로 동시에 소유하지 않는다. `hash`는 소유한 내용의 기준 해시다.
+- **`last_success`**: 계획한 쓰기가 모두 성공한 뒤에만 기록한다. `id`는 백업 디렉터리 이름으로도 쓴다. `at`은 UTC RFC 3339 시각(`…Z`)이다. `id`는 같은 시각을 `YYYYMMDD-HHMMSS`로 쓴 값이며, 같은 이름의 백업 디렉터리가 있으면 `-2`, `-3`, …을 붙인다.
+- **`managed`**: 소유권을 기록한다. `block`이 없는 항목은 도구가 파일 전체를 소유한다는 뜻이다. `block`이 있는 항목은 도구가 해당 관리 블록만 소유한다는 뜻이고, 파일의 나머지는 사용자 소유다. 한 경로를 두 방식으로 동시에 소유하지 않는다. `hash`는 소유한 내용의 기준 해시다. 빈 `instructions/completed.log`처럼 없을 때만 만드는 파일은 소유하지 않으며 기록하지도 않는다.
 - **`deployments`**: 에이전트별 스킬 배치다. `copy` 배치에는 해시가 있어야 하고, `reference` 배치에는 해시가 없다. 배치 대상은 중복되지 않는다.
 - **`adapters`**: 도구가 에이전트별로 구현한 어댑터 규약 버전이다.
 

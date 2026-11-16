@@ -117,6 +117,21 @@ A local directory outside the project cannot be stored here, because shared file
 - **`deployments`**: agent-specific skill placements. A `copy` deployment must have a hash; a `reference` deployment has none. Targets are unique.
 - **`adapters`**: the adapter contract version this tool implemented for each agent.
 
+## Managed block markers
+
+A managed block is the lines between a begin and an end marker with the same ID. The ID is a slug. Each marker sits on its own line, and surrounding whitespace is ignored.
+
+| File type | Begin | End |
+| --- | --- | --- |
+| Markdown (`AGENTS.md`, `CLAUDE.md`, …) | `<!-- agent-harness:begin ID -->` | `<!-- agent-harness:end ID -->` |
+| `#` comments (`.gitignore`) | `# agent-harness:begin ID` | `# agent-harness:end ID` |
+
+- Text outside the markers belongs to the user and is kept byte for byte, including CRLF line endings, a missing final newline, and a BOM.
+- A new block is appended after the user content, separated by one blank line. On later runs it is replaced in place, so it is never duplicated.
+- The block hash in `managed[].hash` covers the lines between the markers, with line endings normalized to LF. A change of line endings alone is therefore not an edit.
+- Any line containing `agent-harness:` that is not an exact marker is a conflict. So are duplicate IDs, nested blocks, a missing end, an end without a begin, and an end whose ID does not match. The file is never rewritten as a whole to repair markers.
+- A block body may not contain `agent-harness:` text.
+
 ## Stage 2 coverage
 
 The Stage 2 spec §8 asks for state items. Stage 1 records them as follows:

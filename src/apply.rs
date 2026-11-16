@@ -55,6 +55,9 @@ pub enum Ownership {
     /// Created only when missing, never changed, never owned
     /// (e.g. an empty `completed.log`).
     CreateOnly,
+    /// The caller could not build safe content (e.g. malformed block
+    /// markers); always planned as a conflict, never written.
+    Unresolvable(String),
 }
 
 impl Desired {
@@ -184,6 +187,9 @@ pub fn plan(
 }
 
 fn classify(state: &HarnessState, d: &Desired, current: Option<&[u8]>) -> Action {
+    if let Ownership::Unresolvable(why) = &d.ownership {
+        return Action::Conflict(why.clone());
+    }
     let Some(current) = current else {
         return Action::Create;
     };
@@ -194,6 +200,7 @@ fn classify(state: &HarnessState, d: &Desired, current: Option<&[u8]>) -> Action
         .map(|m| m.hash.as_str());
     let (current_owned, new_owned) = match &d.ownership {
         Ownership::CreateOnly => return Action::Preserve,
+        Ownership::Unresolvable(_) => unreachable!("handled above"),
         Ownership::File => (Some(sha256(current)), sha256(&d.content)),
         Ownership::Block {
             new_hash,
@@ -368,7 +375,7 @@ fn fill_untouched(report: &mut ApplyReport, plan: &Plan) {
 fn record_ownership(state: &mut HarnessState, item: &PlanItem) {
     let d = &item.desired;
     let hash = match &d.ownership {
-        Ownership::CreateOnly => return,
+        Ownership::CreateOnly | Ownership::Unresolvable(_) => return,
         Ownership::File => sha256(&d.content),
         Ownership::Block { new_hash, .. } => new_hash.clone(),
     };

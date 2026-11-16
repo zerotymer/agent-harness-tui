@@ -1,8 +1,8 @@
 # 0005 — 1단계: 관리 블록
 
 > Entity UUID: 01a1e24a-c32b-755c-8fad-1b53df20499b   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/managed-blocks/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/managed-blocks/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §3 소유권, §5 관리 블록
 
 ## 목표

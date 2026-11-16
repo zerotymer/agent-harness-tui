@@ -1,0 +1,19 @@
+{
+  "source": "md.zerotymer.net",
+  "uuid": "5c502e34-1daf-44d7-b740-1baa03e583e5",
+  "type": "skill",
+  "locales": {
+    "en": {
+      "file": "SKILL.md",
+      "updatedAt": "2026-05-25T04:55:55.500Z",
+      "contentHash": "sha256:801c1396726f8a555404c993fc64531de4428ef7eba415d7fd553511d4108628"
+    },
+    "ko": {
+      "file": "SKILL_ko.md",
+      "updatedAt": "2026-05-25T04:56:00.043Z",
+      "contentHash": "sha256:79f885eedb76092d5e1d552260c3c35160096dfd441bd4d9d299e8cc5cbc173d"
+    }
+  },
+  "importedAt": "2026-11-16",
+  "localChanges": "Frontmatter normalized. Local edits (wiki original unchanged): Branch names, {DATETIME} format, dev and fix rules aligned with git-branch-guideline v1.1.0; worktree path mapping unchanged."
+}

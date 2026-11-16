@@ -1,0 +1,10 @@
+{
+  "source": "md.zerotymer.net",
+  "uuid": "14cea96f-f1e2-461e-b9a7-96b5a6f63b67",
+  "type": "skill",
+  "locales": {
+    "en": { "file": "SKILL.md", "updatedAt": "2026-06-28T12:25:36.744Z", "contentHash": "sha256:0e306d8fba8b7d173ab0e85ab2d40a93ec393cbc814b586025de5c6f6d5f9c1a" },
+    "ko": { "file": "SKILL_ko.md", "updatedAt": "2026-06-28T12:25:48.030Z", "contentHash": "sha256:efb7b376b6ba866e3ec435069d3ee42e14d9d55c4cb0b2c8e478e5d10d790866" }
+  },
+  "importedAt": "2026-11-16"
+}

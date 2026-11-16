@@ -1,8 +1,8 @@
 # 0006 — 1단계: 지시서 디렉터리·에이전트 지침 생성
 
 > Entity UUID: 01a1e24a-c342-7afd-8fb8-3599be07a937   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/guidance-generation/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/guidance-generation/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §2, §5
 
 ## 목표

@@ -164,11 +164,13 @@ impl ProjectRoot {
         let rel = if drive && !cfg!(windows) {
             return Err(PathError::OutsideRoot(raw.to_string()));
         } else if drive || Path::new(&unified).is_absolute() || unified.starts_with('/') {
-            // ponytail: lexical prefix match against the canonical root.
-            // On Windows the canonical root is a verbatim `\\?\C:\` path and
-            // case folding is not applied, so absolute input may be rejected
-            // there; unverified until the Windows run (see 0011).
-            let abs = lexical_normalize(Path::new(&unified))
+            // Windows parses both separators natively and needs `\` intact for
+            // verbatim `\\?\` prefixes. Canonicalizing the existing part lets
+            // `C:\..`, `\\?\C:\..`, other letter case and symlinked aliases
+            // match the canonical root (0013).
+            let native = if cfg!(windows) { raw } else { unified.as_str() };
+            let abs = lexical_normalize(Path::new(native))
+                .map(|p| canonicalize_existing(&p))
                 .ok_or_else(|| PathError::OutsideRoot(raw.to_string()))?;
             let inner = abs
                 .strip_prefix(&self.root)
@@ -225,6 +227,24 @@ fn normalize_components(relative: &Path, raw: &str) -> Result<RelPath, PathError
 fn is_windows_drive(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':'
+}
+
+/// Canonicalizes the longest existing ancestor and re-appends the rest.
+fn canonicalize_existing(path: &Path) -> PathBuf {
+    let mut base = path;
+    let mut tail = Vec::new();
+    loop {
+        if let Ok(real) = base.canonicalize() {
+            return tail.iter().rev().fold(real, |p, c| p.join(c));
+        }
+        match (base.parent(), base.file_name()) {
+            (Some(parent), Some(name)) => {
+                tail.push(name.to_os_string());
+                base = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
 }
 
 /// Resolves `.` and `..` without touching the filesystem.
@@ -485,6 +505,31 @@ mod tests {
             root.resolve(outside.to_str().unwrap()),
             Err(PathError::OutsideRoot(_))
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn absolute_through_symlinked_alias_becomes_relative() {
+        let p = TempProject::new();
+        let alias = p.0.with_extension("alias");
+        std::os::unix::fs::symlink(&p.0, &alias).unwrap();
+        let input = alias.join("refs").join("a");
+        let got = p.root().resolve(input.to_str().unwrap());
+        let _ = fs::remove_file(&alias);
+        assert_eq!(got.unwrap().as_str(), "refs/a");
+    }
+
+    /// Plain `C:\..` input in another letter case, as users type it.
+    #[cfg(windows)]
+    #[test]
+    fn plain_drive_path_in_other_case_becomes_relative() {
+        let p = TempProject::new();
+        let root = p.root();
+        let plain = root.path().to_str().unwrap().trim_start_matches(r"\\?\");
+        let input = format!(r"{}\refs\a", plain.to_lowercase());
+        assert_eq!(root.resolve(&input).unwrap().as_str(), "refs/a");
+        let slashed = format!("{}/refs/a", plain.replace('\\', "/"));
+        assert_eq!(root.resolve(&slashed).unwrap().as_str(), "refs/a");
     }
 
     #[cfg(not(windows))]

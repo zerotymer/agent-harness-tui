@@ -9,7 +9,7 @@ use agent_harness_tui::contract::{
 };
 use agent_harness_tui::init::{self, PendingImport};
 use agent_harness_tui::paths::{PathError, ProjectRoot, RelPath};
-use agent_harness_tui::sources::{LocalDir, SkillSource, SourceError};
+use agent_harness_tui::sources::{LocalDir, SkillSource};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -275,6 +275,7 @@ fn rejects_path_escapes_and_collisions() {
 #[cfg(unix)]
 #[test]
 fn rejects_package_paths_that_escape() {
+    use agent_harness_tui::sources::SourceError;
     let p = Project::new();
     let outside = Project::new();
     std::os::unix::fs::symlink(

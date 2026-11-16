@@ -6,6 +6,8 @@ This document covers Stage 1, initial creation. Updating an existing harness is 
 
 ## Install
 
+Prebuilt binaries for Linux, Windows and macOS are attached to each GitHub Release (`.tar.gz`, or `.zip` on Windows), with a `SHA256SUMS` file to check them against. Or build from source:
+
 Requirements: a stable Rust toolchain. Stage 1 was built and tested with Rust 1.97.1, edition 2024.
 
 ```sh

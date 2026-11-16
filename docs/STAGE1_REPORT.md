@@ -42,8 +42,8 @@ Also verified:
 | Platform | Status | What was checked |
 | --- | --- | --- |
 | Linux (Rocky 9.8) | Verified | All tests, including Unix-only symlink tests. The real binary ran in a pseudo-terminal (`script`, 120×40): Enter-only initialization, files created, exit code 0, alternate screen left (`ESC[?1049l`) and cursor restored (`ESC[?25h`). Running without a TTY exits with code 2 and writes nothing. |
-| Windows | **Not verified** | To be checked separately (user decision): absolute input paths against the canonical `\\?\C:\` root and case folding, `attrib +h` on the output folder, console rendering and Korean input, symlink tests (skipped there) |
-| macOS | **Not verified** | To be checked separately: terminal behavior, case-insensitive file system behavior for duplicate detection, symlink handling under `/private/var` temp paths |
+| Windows | Automated tests pass in CI (run 43979645645) | Clippy, tests and release build on `windows-latest`. Absolute input against the canonical `\\?\C:\` root and case folding was fixed in 0013. Still to check by hand: `attrib +h` on the output folder, console rendering and Korean input. Symlink tests are skipped there |
+| macOS | Automated tests pass in CI (run 43979645645) | Clippy, tests and release build on `macos-latest`. Still to check by hand: terminal behavior, case-insensitive file system behavior for duplicate detection, symlink handling under `/private/var` temp paths |
 
 ## Agent adapters (checked 2026-11-16, adapter version 1)
 
@@ -71,7 +71,7 @@ The skill `wiki-skill-import` (`14cea96f-f1e2-461e-b9a7-96b5a6f63b67`, `type = "
 | --- | --- | --- |
 | Gateway catalog list/search | Labeled dummy with fixed entries, no network | A REST contract for listing and searching (user will provide) |
 | Frontmatter use | Content stored verbatim; the skill name is typed by the user | A policy (user will decide) |
-| Windows and macOS verification | Unverified | Separate runs (user decision) |
+| Windows and macOS verification | Automated tests pass in CI; manual terminal checks pending | Separate runs (user decision) |
 | Codex `.codex/skills` | Not used | Appears in official docs |
 
 ## Known limitations

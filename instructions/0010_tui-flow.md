@@ -1,8 +1,8 @@
 # 0010 — 1단계: TUI 흐름
 
 > Entity UUID: 01a1e24a-c3ab-70fc-bf43-2c79adf64b39   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/tui-flow/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/tui-flow/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §7
 
 ## 목표

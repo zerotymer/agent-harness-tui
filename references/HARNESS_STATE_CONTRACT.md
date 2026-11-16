@@ -66,7 +66,7 @@ ref = "local-one"           # directory relative to the local source
 - `wiki-gateway` needs `token_env` (matching `[A-Z_][A-Z0-9_]*`) and takes no `path`.
 - Each skill must reference an existing source. A `wiki-gateway` skill's `ref` must be a UUID, and its `type` must be a slug.
 
-A local directory outside the project cannot be stored here, because shared files never hold absolute paths. Such a directory can be used for a one-time import. The lock then records the source ID and the hashes.
+A local directory outside the project cannot be stored here, because shared files never hold absolute paths. The Stage 1 TUI therefore accepts only local source directories inside the project; copy outside skills into the project first.
 
 ## `harness.lock.json`
 

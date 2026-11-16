@@ -8,6 +8,7 @@ Schema version: **1**. Implemented in `src/contract.rs` (instruction 0003). It c
 | `harness.lock.json` | Resolved imports: source and ref, file list, hashes | Track |
 | `.harness/state.json` | Last successful apply, ownership, baseline hashes, deployments, adapters | Ignore |
 | `.harness/backups/<apply-id>/<path>` | Pre-apply copy of each file the tool changed | Ignore |
+| `.harness/apply.lock` | Present only while an apply runs; a leftover file blocks applying until the user removes it | Ignore |
 
 ## Common rules
 
@@ -101,7 +102,7 @@ A local directory outside the project cannot be stored here, because shared file
   "last_success": { "id": "20261116-140000", "at": "2026-11-16T14:00:00+09:00", "tool_version": "0.1.0" },
   "managed": [
     { "path": "CLAUDE.md", "block": "agent-harness", "hash": "sha256:…" },
-    { "path": "instructions/completed.log", "hash": "sha256:…" }
+    { "path": ".skills/wiki-skill-import/SKILL.md", "hash": "sha256:…" }
   ],
   "deployments": [
     { "skill": "wiki-skill-import", "agent": "claude-code", "placement": "copy",
@@ -111,8 +112,8 @@ A local directory outside the project cannot be stored here, because shared file
 }
 ```
 
-- **`last_success`**: written only after every planned write succeeded. Its `id` also names the backup directory. `at` is an RFC 3339 timestamp with an offset.
-- **`managed`**: records ownership. An entry without `block` means the tool owns the whole file. An entry with `block` means the tool owns only that managed block, and the rest of the file belongs to the user. A path is never owned both ways. `hash` is the baseline of the owned content.
+- **`last_success`**: written only after every planned write succeeded. Its `id` also names the backup directory. `at` is an RFC 3339 timestamp in UTC (`…Z`), and `id` is the same instant as `YYYYMMDD-HHMMSS`, with `-2`, `-3`, … appended if that backup directory already exists.
+- **`managed`**: records ownership. An entry without `block` means the tool owns the whole file. An entry with `block` means the tool owns only that managed block, and the rest of the file belongs to the user. A path is never owned both ways. `hash` is the baseline of the owned content. Create-only files, such as an empty `instructions/completed.log`, are never owned or recorded.
 - **`deployments`**: agent-specific skill placements. A `copy` deployment must have a hash; a `reference` deployment has none. Targets are unique.
 - **`adapters`**: the adapter contract version this tool implemented for each agent.
 

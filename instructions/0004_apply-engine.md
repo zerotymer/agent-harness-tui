@@ -1,8 +1,8 @@
 # 0004 — 1단계: 적용 엔진: 계획·미리보기·백업·복구
 
 > Entity UUID: 01a1e24a-c312-76f0-b9c9-71c7dc24ec51   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/apply-engine/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/apply-engine/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §3, §7 5~6단계
 
 ## 목표

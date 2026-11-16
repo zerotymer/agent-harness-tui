@@ -1,9 +1,9 @@
 # 0001 — 1단계: 프로젝트 골격 및 기술 기준선
 
 > Entity UUID: 01a1e208-0a51-76c3-a5a9-b1f64c04b60f   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/project-skeleton/01a1e208`)
-> 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` README "출처 및 호환성 확인", 명세 §산출물
+> Status: IN_PROGRESS
+> Branch: `feature/project-skeleton/01a1e208`
+> 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — README "출처 및 호환성 확인", 명세 §산출물
 
 ## 목표
 Rust 바이너리 크레이트를 만들고 의존성 버전과 빌드·테스트 명령을 확정한다. 이후 지시서가 기능을 얹을 최소 기반만 만든다.

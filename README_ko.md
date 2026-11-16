@@ -31,6 +31,7 @@
 
 - [Ratatui 백엔드](https://ratatui.rs/concepts/backends/comparison/)
 - [Crossterm](https://github.com/crossterm-rs/crossterm)
+  - 2026-11-16 확인(Context7, docs.rs): Ratatui 0.30.x는 기본으로 `crossterm` 백엔드(crossterm 0.29.x, 기능 `crossterm_0_29`)를 쓰고 `ratatui::crossterm`으로 다시 내보낸다. 따라서 크레이트는 `ratatui`에만 의존한다. 툴체인: Rust 1.97.1, edition 2024.
 - [프로젝트 AGENTS.md 지침](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 - [Claude Code 프로젝트 지침](https://code.claude.com/docs/en/memory)
 - [Claude Code 훅](https://code.claude.com/docs/en/hooks)

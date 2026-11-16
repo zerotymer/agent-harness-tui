@@ -4,7 +4,12 @@
 
 ## 현재 상태
 
-아직 애플리케이션 코드가 없어서 빌드, 린트, 테스트 명령도 없습니다. 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 Rust TUI(Ratatui + Crossterm)의 명세(SDD)가 들어 있고, 리포지토리 자체도 이미 그 하네스가 관리할 구조를 따르고 있습니다.
+1단계를 진행 중입니다. 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 Rust TUI(Ratatui + Crossterm)의 명세(SDD)와, 이를 구현하는 Rust 크레이트 `agent-harness-tui`가 들어 있습니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
+
+- 빌드: `cargo build`
+- 테스트: `cargo test` (테스트는 임시 디렉터리에 대상 프로젝트를 만들어 검증합니다)
+- 린트: `cargo clippy --all-targets -- -D warnings`
+- 포맷: `cargo fmt --check`
 
 - `README.md` / `README_ko.md`: 목적, 설계 결정, 구현 전에 다시 확인해야 할 공식 출처.
 - `references/STEP_1_INITIAL_CREATION*.md`: 1단계, 초기 하네스 생성.

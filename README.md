@@ -31,6 +31,7 @@ The following official sources informed the plan on 2026-11-15. Recheck supporte
 
 - [Ratatui backends](https://ratatui.rs/concepts/backends/comparison/)
 - [Crossterm](https://github.com/crossterm-rs/crossterm)
+  - Checked 2026-11-16 (Context7, docs.rs): Ratatui 0.30.x uses the `crossterm` backend by default (crossterm 0.29.x, feature `crossterm_0_29`) and re-exports it as `ratatui::crossterm`, so the crate depends on `ratatui` only. Toolchain: Rust 1.97.1, edition 2024.
 - [Project AGENTS.md guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 - [Claude Code project guidance](https://code.claude.com/docs/en/memory)
 - [Claude Code hooks](https://code.claude.com/docs/en/hooks)

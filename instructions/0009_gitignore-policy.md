@@ -1,8 +1,8 @@
 # 0009 — 1단계: Git ignore 처리
 
 > Entity UUID: 01a1e24a-c393-79e1-a94c-d6fd10582729   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/gitignore-policy/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/gitignore-policy/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §6
 
 ## 목표

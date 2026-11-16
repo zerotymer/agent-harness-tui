@@ -70,6 +70,20 @@ impl std::error::Error for PathError {}
 pub struct RelPath(String);
 
 impl RelPath {
+    /// Lexically validates a stored project-relative path. No filesystem
+    /// access, so symlinks are checked later by `ProjectRoot::resolve`.
+    pub fn parse(input: &str) -> Result<RelPath, PathError> {
+        let raw = input.trim();
+        if raw.is_empty() {
+            return Err(PathError::Empty);
+        }
+        let unified = raw.replace('\\', "/");
+        if is_windows_drive(&unified) || unified.starts_with('/') {
+            return Err(PathError::OutsideRoot(raw.to_string()));
+        }
+        normalize_components(Path::new(&unified), raw)
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -93,6 +107,19 @@ impl RelPath {
 impl fmt::Display for RelPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+impl serde::Serialize for RelPath {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.0)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RelPath {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        RelPath::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -133,41 +160,23 @@ impl ProjectRoot {
         // a literal backslash in a Unix file name is not supported.
         let unified = raw.replace('\\', "/");
 
-        let relative = if is_windows_drive(&unified) && !cfg!(windows) {
+        let drive = is_windows_drive(&unified);
+        let rel = if drive && !cfg!(windows) {
             return Err(PathError::OutsideRoot(raw.to_string()));
-        } else if Path::new(&unified).is_absolute() || unified.starts_with('/') {
+        } else if drive || Path::new(&unified).is_absolute() || unified.starts_with('/') {
             // ponytail: lexical prefix match against the canonical root.
             // On Windows the canonical root is a verbatim `\\?\C:\` path and
             // case folding is not applied, so absolute input may be rejected
             // there; unverified until the Windows run (see 0011).
             let abs = lexical_normalize(Path::new(&unified))
                 .ok_or_else(|| PathError::OutsideRoot(raw.to_string()))?;
-            abs.strip_prefix(&self.root)
-                .map(Path::to_path_buf)
-                .map_err(|_| PathError::OutsideRoot(raw.to_string()))?
+            let inner = abs
+                .strip_prefix(&self.root)
+                .map_err(|_| PathError::OutsideRoot(raw.to_string()))?;
+            normalize_components(inner, raw)?
         } else {
-            PathBuf::from(&unified)
+            normalize_components(Path::new(&unified), raw)?
         };
-
-        let mut parts: Vec<String> = Vec::new();
-        for c in relative.components() {
-            match c {
-                Component::Normal(s) => parts.push(s.to_string_lossy().into_owned()),
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    parts
-                        .pop()
-                        .ok_or_else(|| PathError::OutsideRoot(raw.to_string()))?;
-                }
-                Component::RootDir | Component::Prefix(_) => {
-                    return Err(PathError::OutsideRoot(raw.to_string()));
-                }
-            }
-        }
-        if parts.is_empty() {
-            return Err(PathError::IsRoot(raw.to_string()));
-        }
-        let rel = RelPath(parts.join("/"));
         self.check_symlinks(&rel)?;
         Ok(rel)
     }
@@ -188,6 +197,29 @@ impl ProjectRoot {
         }
         Ok(())
     }
+}
+
+/// Folds `.`/`..` of a relative path into a `RelPath`; `raw` is for errors.
+fn normalize_components(relative: &Path, raw: &str) -> Result<RelPath, PathError> {
+    let mut parts: Vec<String> = Vec::new();
+    for c in relative.components() {
+        match c {
+            Component::Normal(s) => parts.push(s.to_string_lossy().into_owned()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                parts
+                    .pop()
+                    .ok_or_else(|| PathError::OutsideRoot(raw.to_string()))?;
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(PathError::OutsideRoot(raw.to_string()));
+            }
+        }
+    }
+    if parts.is_empty() {
+        return Err(PathError::IsRoot(raw.to_string()));
+    }
+    Ok(RelPath(parts.join("/")))
 }
 
 fn is_windows_drive(s: &str) -> bool {

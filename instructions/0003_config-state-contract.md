@@ -1,8 +1,8 @@
 # 0003 — 1단계: 설정·잠금·상태 규약
 
 > Entity UUID: 01a1e24a-c2fa-72f4-914c-d9af2cc792e2   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/config-state-contract/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/config-state-contract/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §3, 2단계 명세의 상태 기록 항목
 
 ## 목표

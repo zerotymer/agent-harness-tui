@@ -4,7 +4,7 @@
 
 Create a standalone Rust TUI for initial project harness configuration. Run it from the target project root. Use Ratatui and Crossterm, with Linux servers as the primary environment and native Windows and macOS support.
 
-Implement this instruction in a separate application repository selected for development, not in this planning folder. Preserve existing user files. Do not add worktree management, Worktrunk, Docktree, runtime modes, executable hooks, service management, or a general harness updater in this stage. Store the state needed by the Stage 2 updater now.
+Implement this instruction in this repository. Preserve existing user files. Do not add worktree management, Worktrunk, Docktree, runtime modes, executable hooks, service management, or a general harness updater in this stage. Store the state needed by the Stage 2 updater now.
 
 ## 1. Project-root and path contract
 
@@ -58,7 +58,12 @@ Use the following initial file contract, with explicit schema versions:
 ## 4. External skills and references
 
 - Provide a source adapter boundary for listing, searching, previewing, and fetching skill documents and bundled files.
-- The primary intended source is `md.zerotymer.net`. Obtain and verify its actual API, document IDs, authentication, languages and revision contract before writing a concrete adapter. Do not invent endpoints or scrape guessed paths.
+- The primary source is the `md.zerotymer.net` Wiki.js, read only through its read-only gateway `https://md-gw.zerotymer.net`. The verified contract is the one in the `wiki-skill-import` skill (`.skills/wiki-skill-import/`):
+  - `GET /pages/by-uuid?uuid=<uuid>[&type=<type>]` with `Authorization: Bearer <GATEWAY_TOKEN>`. Pass `type` only when the user gives a path prefix such as `skill`.
+  - The response holds `pages.en` and `pages.ko`, each with `content` (Markdown) and `contentHash`; a missing locale is `null`, and both missing means `PAGE_NOT_FOUND`.
+  - Store `pages.en.content` as `SKILL.md` and `pages.ko.content` as `SKILL_ko.md`, unchanged. How to use frontmatter (for example, to derive the skill name or strip Wiki.js page frontmatter) is decided later. Import one locale only if the user accepts a partial import. Never write an empty file.
+  - Never call the Wiki.js GraphQL API or scrape `md.zerotymer.net` HTML. That site is a human-facing reference only.
+  - Catalog listing and search have no documented REST contract yet. Until one is supplied, back them with a clearly labeled dummy that returns fixed entries without any network call, and import by UUID. Do not invent endpoints.
 - Allow a local-directory source so initialization remains usable before remote API details are supplied.
 - Fetch remote catalogs dynamically. Import selected content into `.skills/`, retaining source identity and resolved revision or hash. Do not change installed skills merely because the remote source changed.
 - Keep ordinary reference documents under `references/`; reserve `.skills/` for canonical skill packages. Preserve bundled scripts and templates where present, but do not execute them during import.

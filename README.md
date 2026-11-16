@@ -4,7 +4,7 @@
 
 Build a standalone Rust TUI that configures an agent harness from the current project root. The tool manages instruction, reference, output, and skill paths and generates project-wide agent guidance.
 
-These documents are implementation instructions for a future software repository. This folder contains planning documents only; do not create an application, initialize Git, install dependencies, or register services here.
+These documents are the implementation instructions for this repository. The application is implemented here, in stage order. Do not initialize Git or register services.
 
 ## Document map
 

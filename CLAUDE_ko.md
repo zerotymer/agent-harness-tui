@@ -10,6 +10,8 @@
 - 테스트: `cargo test` (테스트는 임시 디렉터리에 대상 프로젝트를 만들어 검증합니다)
 - 린트: `cargo clippy --all-targets -- -D warnings`
 - 포맷: `cargo fmt --check`
+- 툴체인: `rust-toolchain.toml`에 고정 (Rust 1.97.1, rustfmt·clippy 포함).
+- CI: `.github/workflows/ci.yml`이 PR과 `main` push마다 Linux·Windows·macOS에서 clippy·테스트·release 빌드를 실행하고(fmt는 Linux), 실행 파일을 워크플로 결과물로 올립니다. 액션은 공식 `actions/*`만 쓰며 커밋 SHA로 고정합니다.
 
 - `README.md` / `README_ko.md`: 목적, 설계 결정, 구현 전에 다시 확인해야 할 공식 출처.
 - `references/STEP_1_INITIAL_CREATION*.md`: 1단계, 초기 하네스 생성.

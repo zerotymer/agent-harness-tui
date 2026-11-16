@@ -10,6 +10,8 @@ Stage 1 is implemented and awaiting the user's acceptance (see `docs/STAGE1_REPO
 - Test: `cargo test` (tests build target projects in temporary directories)
 - Lint: `cargo clippy --all-targets -- -D warnings`
 - Format: `cargo fmt --check`
+- Toolchain: pinned in `rust-toolchain.toml` (Rust 1.97.1 with rustfmt and clippy).
+- CI: `.github/workflows/ci.yml` runs clippy, tests and a release build on Linux, Windows and macOS (fmt on Linux) for pull requests and pushes to `main`, and uploads the binaries as workflow artifacts. Actions are official `actions/*` only, pinned to commit SHAs.
 
 - `README.md` / `README_ko.md`: purpose, design decisions, and official sources to re-check before implementing.
 - `references/STEP_1_INITIAL_CREATION*.md`: Stage 1, which covers initial harness creation.

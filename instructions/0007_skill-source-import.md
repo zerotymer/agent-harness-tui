@@ -17,7 +17,7 @@
 - 게이트웨이 규약 원본: `.skills/wiki-skill-import/SKILL.md` (명세 §4에 반영됨)
 - 게이트웨이 목록·검색: REST 규약이 정해질 때까지 더미로 진행 (사용자 결정 2026-11-16)
 - 프런트매터 활용 방식: 추후 지시 (사용자 결정 2026-11-16)
-- [ ] 수동 확인용 `GATEWAY_TOKEN` (자동 테스트는 네트워크 없이 동작해야 함)
+- [x] 수동 확인용 토큰: 사용자 환경의 `LLM_WIKI_API_KEY` 사용 (`token_env`로 이름만 지정, 자동 테스트는 네트워크 없이 동작)
 
 ## 범위
 - 포함:
@@ -56,6 +56,13 @@
 
 ## 산출물
 - 소스·가져오기 모듈 + 테스트
+
+## 검증 기록
+- 2026-11-16 실제 게이트웨이 확인 (`token_env = "LLM_WIKI_API_KEY"`, UUID `14cea96f-f1e2-461e-b9a7-96b5a6f63b67`, `type = "skill"`)
+  - 두 언어 모두 수신, 누락·경고 없음. `title`에서 만든 기본 이름은 `wiki-skill-import`
+  - 언어별 `contentHash`가 이 저장소 `.skills/wiki-skill-import/source.json`의 값과 일치 (en `sha256:0e306d8f…`, ko `sha256:efb7b376…`)
+  - 받은 바이트의 SHA-256이 이 저장소의 `SKILL.md`(`2aa8a3ca…`), `SKILL_ko.md`(`d9f63624…`)와 일치. 내용을 가공 없이 저장함을 확인
+  - 0011 검증 보고에 이 결과를 옮긴다
 
 ## 완료 기준 (DoD)
 - [ ] 패키지 경로 이탈 거부 테스트 포함 (명세 §8)

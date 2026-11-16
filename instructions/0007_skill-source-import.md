@@ -1,8 +1,8 @@
 # 0007 — 1단계: 스킬 소스 및 가져오기
 
 > Entity UUID: 01a1e24a-c35a-7fd2-9bb8-4ae6f2f0043c   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/skill-source-import/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/skill-source-import/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §4
 
 ## 목표

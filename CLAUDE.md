@@ -12,17 +12,16 @@ No application code yet: no build, lint, or test commands exist. The repo holds 
 
 The spec is the source of truth. When an imported skill conflicts with the spec or with another skill, check with the user if needed, then fix the spec (both languages) or the local skill copy in `.skills/`. Record any local skill edit in that skill's `source.json` `localChanges`. Never edit the wiki originals; the user reports upstream changes, and a refresh must re-apply the local edits.
 
-## Rules from the spec
+## Working rules for this repository
 
 - **Stage order:** Stage 1 must pass its acceptance criteria before any Stage 2 work starts. Stage 1 must not include worktree/service management, runtime hook execution, a general updater, or an SQLite schema. It must still store the state that the Stage 2 updater will need.
 - **Languages:**
   - Work instructions are written in Korean only.
   - Agent-facing documents (references, skills, guidance such as this file) are an English `{name}.md` plus an equivalent Korean `{name}_ko.md`, and both are edited together.
   - Never invent translations for imported source documents.
-- **Project root:** the current working directory is the project root. Never search upward, switch roots, or run `git init` automatically.
-- **Do not invent external contracts:** do not guess endpoints or event names for `md.zerotymer.net`, agent hook contracts, Worktrunk (`.config/wt.toml`), or Docktree. Verify them against current official docs first. Unsupported features must show as unavailable; never add shims for them.
+- **Do not invent external contracts:** do not guess endpoints or event names for `md.zerotymer.net`, agent hook contracts, Worktrunk (`.config/wt.toml`), or Docktree. Verify them against current official docs first. Unsupported features must show as unavailable; never add shims for them. The one exception is the gateway catalog list/search dummy that the Stage 1 spec §4 allows.
 - **Git policy:**
-  - Track `instructions/` (including `.completed/` and `completed.log`), `references/`, `.skills/`, `harness.toml`, `harness.lock.json`, and the root guidance files.
+  - Track `instructions/` (including `.completed/` and `completed.log`), `references/`, `.skills/`, and the root guidance files.
   - Ignore `.output/`, `.harness/`, `agent.db*`, agent session files (`.claude/session*`, `.codex/session*`), and credentials. `.output/` is one-way generated output and is never read back as input.
   - Keep `.gitignore` in sync whenever a new local-state or output path appears.
   - Never commit or push on the user's behalf.
@@ -32,6 +31,12 @@ The spec is the source of truth. When an imported skill conflicts with the spec 
   - On completion, move the file to `instructions/.completed/<UUID>.md` and append `UUID | summary | timestamp(+0900)` to `instructions/completed.log`.
   - `completed.log` is append-only: never truncate, rewrite, or reorder it.
 - **Branches:** follow `git-branch-guideline`, for example `feature/{NAME}/{UUID}`, using the instruction's UUID. Worktrees go in `../.worktree/{BRANCH}` (see `git-worktree-guideline`). Never commit directly to `main` or `staging`.
+
+## Product requirements (what the TUI does to target projects)
+
+The specs in `references/` describe the rules the TUI creates and enforces in the target project it runs on. They are not this repository's working rules, even where they look alike. Implement and test them as product behavior against temporary target projects; never use this repository's own `instructions/`, `.gitignore` or guidance files as fixtures. Examples:
+
+- **Project root:** the current working directory is the project root. Never search upward, switch roots, or run `git init` automatically.
 - **Managed edits:** change existing user files only inside bounded managed blocks. Malformed markers count as a conflict and must never cause a full-file overwrite. Only record success after every write has succeeded.
 
 ## Skills

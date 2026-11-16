@@ -1,0 +1,50 @@
+# 0001 — 1단계: 프로젝트 골격 및 기술 기준선
+
+> Entity UUID: 01a1e208-0a51-76c3-a5a9-b1f64c04b60f   (로컬 생성, UUIDv7)
+> Status: TODO
+> Branch: (작업 시작 시 기입 — `feature/project-skeleton/01a1e208`)
+> 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` README "출처 및 호환성 확인", 명세 §산출물
+
+## 목표
+Rust 바이너리 크레이트를 만들고 의존성 버전과 빌드·테스트 명령을 확정한다. 이후 지시서가 기능을 얹을 최소 기반만 만든다.
+
+
+## 선행 조건
+- 없음 (1단계 첫 작업)
+- [ ] Rust stable 툴체인 사용 가능 여부 확인
+
+## 범위
+- 포함:
+  - Ratatui·Crossterm 최신 안정 버전과 지원 플랫폼을 공식 자료로 확인하고 확인일을 기록
+  - `Cargo.toml`(최신 안정 edition), `Cargo.lock`, 최소 `src/main.rs`
+  - 테스트용 임시 디렉터리 등 개발 의존성 결정 (유지보수되는 안정 버전만)
+  - `.gitignore`에 `target/` 추가
+  - `CLAUDE.md` / `CLAUDE_ko.md` "현재 상태"에 빌드·테스트·린트 명령 반영
+  - README(영/한) 출처 목록에 확정 버전·확인일 반영
+- 제외:
+  - 기능 구현, 빈 모듈 스캐폴딩 (모듈은 각 지시서에서 필요할 때 추가)
+  - CI 구성 (0011에서 플랫폼 검증 방식 확정 후 결정)
+
+## 작업 항목
+1. 공식 자료로 Ratatui·Crossterm 버전·호환성 확인
+2. 크레이트 생성 및 의존성 추가
+3. 빌드·테스트·린트 명령 확인
+4. `CLAUDE.md`·README(영/한) 갱신
+
+## 산출물
+- `Cargo.toml`, `Cargo.lock`, `src/main.rs`
+- 갱신된 `CLAUDE.md` / `CLAUDE_ko.md`, `README.md` / `README_ko.md`, `.gitignore`
+
+## 완료 기준 (DoD)
+- [ ] Linux에서 `cargo build` 성공
+- [ ] 테스트 제외 사유: 기능 없는 골격 (스모크 테스트 1개면 충분)
+- [ ] `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` 통과
+- [ ] 의미 있는 테스트 포함 (테스트 제외 시 사유 명시)
+- [ ] 가드레일 확인 (아래)
+- [ ] 브랜치에서 작업하고 PR 준비 (main 직접 push 금지, 커밋·푸시는 사용자)
+- [ ] 완료는 사용자가 명시적으로 선언한다
+
+## 가드레일 확인
+- 1단계 금지 범위(worktree·서비스 관리, 실행형 훅, 범용 업데이트, SQLite 스키마)를 건드리지 않는다.
+- 외부 규약은 확인된 자료(게이트웨이: `wiki-skill-import` 스킬, 에이전트 규약: 공식 문서)에 없는 내용을 추측 구현하지 않는다.
+- 인증 정보·토큰·환경별 절대 경로를 공유 파일·로그·미리보기에 기록하지 않는다.

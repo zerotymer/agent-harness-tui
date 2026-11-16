@@ -8,8 +8,9 @@
 
 use crate::apply::Desired;
 use crate::blocks::{self, Syntax};
-use crate::contract::{AgentId, HarnessConfig};
+use crate::contract::{AgentId, HarnessConfig, Placement};
 use crate::paths::{Layout, ProjectRoot, RelPath};
+use crate::placement::{agent_name, skills_dir};
 use std::io;
 
 pub const BLOCK_ID: &str = "agent-harness";
@@ -55,7 +56,7 @@ pub fn plan_items(
         }
         seen.push(agent);
         for (lang, path) in guidance_files(agent) {
-            let body = render(config, lang);
+            let body = render(config, agent, lang);
             desired.push(blocks::desired(
                 root,
                 path,
@@ -68,8 +69,8 @@ pub fn plan_items(
     Ok((dirs, desired))
 }
 
-/// Block body. Every code span appears in both languages.
-pub fn render(config: &HarnessConfig, lang: Lang) -> String {
+/// Block body for one agent. Every code span appears in both languages.
+pub fn render(config: &HarnessConfig, agent: AgentId, lang: Lang) -> String {
     let en = lang == Lang::En;
     let pick = |e: String, k: String| if en { e } else { k };
     let refs = &config.paths.references;
@@ -212,6 +213,32 @@ pub fn render(config: &HarnessConfig, lang: Lang) -> String {
 
     push("### Skills".into(), "### 스킬".into());
     push(String::new(), String::new());
+    let name = agent_name(agent);
+    let copies = skills_dir(agent);
+    let placement = config
+        .agents
+        .iter()
+        .find(|a| a.id == agent)
+        .map(|a| a.placement);
+    if placement == Some(Placement::Copy) {
+        push(
+            format!(
+                "- {name}: each skill is copied from `{skills}/<id>/` to `{copies}/<id>/`, where {name} discovers it. Edit `{skills}/`, not the copies: copies are regenerated and not tracked by Git."
+            ),
+            format!(
+                "- {name}: 각 스킬은 `{skills}/<id>/`에서 `{copies}/<id>/`로 복사되며, {name}는 그 위치에서 스킬을 찾는다. 복사본이 아니라 `{skills}/`를 편집한다. 복사본은 다시 생성되며 Git으로 추적하지 않는다."
+            ),
+        );
+    } else {
+        push(
+            format!(
+                "- {name}: skills are referenced, not copied. {name} does not discover `{skills}/` automatically; read `{skills}/<id>/SKILL.md` when its topic comes up."
+            ),
+            format!(
+                "- {name}: 스킬을 복사하지 않고 참조한다. {name}는 `{skills}/`를 자동으로 찾지 않으므로, 관련 주제가 나오면 `{skills}/<id>/SKILL.md`를 읽는다."
+            ),
+        );
+    }
     if config.skills.is_empty() {
         push(
             "- None selected yet.".into(),
@@ -326,7 +353,10 @@ mod tests {
         for backlog in [false, true] {
             let mut c = config();
             c.backlog.enabled = backlog;
-            let (en, ko) = (render(&c, Lang::En), render(&c, Lang::Ko));
+            let (en, ko) = (
+                render(&c, AgentId::ClaudeCode, Lang::En),
+                render(&c, AgentId::ClaudeCode, Lang::Ko),
+            );
             assert_eq!(code_spans(&en), code_spans(&ko));
             assert_eq!(en.lines().count(), ko.lines().count(), "same structure");
             for must in [
@@ -342,12 +372,25 @@ mod tests {
     }
 
     #[test]
+    fn placement_line_matches_agent_and_language() {
+        let mut c = config();
+        c.agents[1].placement = Placement::Copy; // codex copies, claude references
+        let codex_en = render(&c, AgentId::Codex, Lang::En);
+        let codex_ko = render(&c, AgentId::Codex, Lang::Ko);
+        assert!(codex_en.contains("`.agents/skills/<id>/`"));
+        assert_eq!(code_spans(&codex_en), code_spans(&codex_ko));
+        let claude = render(&c, AgentId::ClaudeCode, Lang::En);
+        assert!(claude.contains("referenced, not copied"));
+        assert!(!claude.contains(".claude/skills"));
+    }
+
+    #[test]
     fn skills_are_listed_not_inlined() {
-        let en = render(&config(), Lang::En);
+        let en = render(&config(), AgentId::ClaudeCode, Lang::En);
         assert!(en.contains("| review | `.skills/review/` |"));
         let mut c = config();
         c.skills.clear();
-        assert!(render(&c, Lang::Ko).contains("아직 선택한 스킬이 없다"));
+        assert!(render(&c, AgentId::ClaudeCode, Lang::Ko).contains("아직 선택한 스킬이 없다"));
     }
 
     #[test]

@@ -1,8 +1,8 @@
 # 0008 — 1단계: 에이전트별 스킬 배치
 
 > Entity UUID: 01a1e24a-c372-7d50-8a77-aba7f91baf51   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/agent-skill-placement/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/agent-skill-placement/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §5
 
 ## 목표
@@ -14,7 +14,7 @@
 
 ## 선행 조건
 - 0006, 0007
-- [ ] Claude Code·Codex(`AGENTS.md`)의 현재 스킬 탐색·참조 규약을 공식 자료로 확인하고 확인일 기록
+- [x] Claude Code·Codex(`AGENTS.md`)의 현재 스킬 탐색·참조 규약을 공식 자료로 확인하고 확인일 기록 (2026-11-16, 아래 검증 기록)
 
 ## 범위
 - 포함:
@@ -35,6 +35,16 @@
 ## 산출물
 - 에이전트 연결부 모듈 + 테스트
 - 확인한 공식 규약·미지원 방식 기록 (0011 보고에 포함)
+
+## 검증 기록
+- 2026-11-16 공식 스킬 탐색 규약 확인 (Context7 경유, 어댑터 버전 `1`)
+  - Claude Code: 프로젝트 스킬은 `.claude/skills/<name>/SKILL.md`. `SKILL.md` 프런트매터에 `name`·`description` 필수. `.claude/skills` 변경은 자동으로 다시 읽음 (Claude Code CHANGELOG, 스킬 문서)
+  - Codex: 저장소 스킬은 `.agents/skills/<name>/SKILL.md`. 현재 디렉터리부터 저장소 루트까지 각 단계의 `.agents/skills`를 읽음. `name`·`description` 필수 (learn.chatgpt.com "Build skills", "Customization overview")
+  - Codex 소스 코드에는 `<repo>/.codex/skills` 루트도 있으나 공식 사용자 문서에 없으므로 사용하지 않음
+  - 두 에이전트 모두 지침에 경로를 적는 것만으로 `.skills/`를 자동 탐색하지 않음 → 참조 배치는 지침 안내만 제공
+  - 심볼릭 링크 배치는 제공하지 않음 (Windows 권한 요구, 사유와 함께 선택 불가 표시)
+  - 프런트매터는 해석하지 않고, 복사 배치 시 `SKILL.md`가 `---`로 시작하지 않으면 경고만 표시 (프런트매터 활용은 추후 지시)
+  - 0011 검증 보고에 이 결과를 옮긴다
 
 ## 완료 기준 (DoD)
 - [ ] 대상 에이전트 연결부를 최신 공식 규약과 대조 (명세 §8)

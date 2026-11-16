@@ -8,7 +8,8 @@
 //! what was restored and what could not be.
 
 use crate::contract::{
-    AppliedRecord, ContractFile, HarnessState, ManagedEntry, STATE_FILE, backup_path,
+    AdapterRecord, AppliedRecord, ContractFile, Deployment, HarnessState, ManagedEntry, STATE_FILE,
+    backup_path,
 };
 use crate::paths::{ProjectRoot, RelPath};
 use sha2::{Digest, Sha256};
@@ -114,6 +115,10 @@ pub struct Plan {
     /// Directories to create (existing ones are reported as kept).
     pub dirs: Vec<(RelPath, bool)>,
     pub items: Vec<PlanItem>,
+    /// Deployments to record (replacing entries with the same target).
+    pub deployments: Vec<Deployment>,
+    /// Adapter versions to record (replacing entries for the same agent).
+    pub adapters: Vec<AdapterRecord>,
 }
 
 impl Plan {
@@ -183,7 +188,12 @@ pub fn plan(
             action,
         });
     }
-    Ok(Plan { dirs, items })
+    Ok(Plan {
+        dirs,
+        items,
+        deployments: Vec::new(),
+        adapters: Vec::new(),
+    })
 }
 
 fn classify(state: &HarnessState, d: &Desired, current: Option<&[u8]>) -> Action {
@@ -301,8 +311,16 @@ fn apply_with(
     for i in &plan.items {
         record_ownership(&mut new_state, i);
     }
+    for d in &plan.deployments {
+        new_state.deployments.retain(|o| o.target != d.target);
+        new_state.deployments.push(d.clone());
+    }
+    for a in &plan.adapters {
+        new_state.adapters.retain(|o| o.agent != a.agent);
+        new_state.adapters.push(a.clone());
+    }
     let mut report = ApplyReport::default();
-    if !plan.has_writes() && new_state.managed == state.managed {
+    if !plan.has_writes() && new_state == *state {
         fill_untouched(&mut report, plan);
         return Ok(report); // idempotent: nothing to do, nothing recorded
     }

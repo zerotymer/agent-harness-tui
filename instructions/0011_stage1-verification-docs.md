@@ -1,8 +1,8 @@
 # 0011 — 1단계: 1단계 통합 검증·문서·보고
 
 > Entity UUID: 01a1e24a-c3c4-7a86-afc8-41d9c5ba6d53   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/stage1-verification-docs/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/stage1-verification-docs/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §8, §산출물
 
 ## 목표

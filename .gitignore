@@ -22,3 +22,6 @@ agent.db-journal
 .env.*
 !.env.example
 .credentials.json
+
+# Rust build output
+/target/

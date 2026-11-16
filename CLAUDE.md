@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-No application code yet: no build, lint, or test commands exist. The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, and the repo itself already follows the layout that harness will manage.
+Stage 1 is in progress: the repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
+
+- Build: `cargo build`
+- Test: `cargo test` (tests build target projects in temporary directories)
+- Lint: `cargo clippy --all-targets -- -D warnings`
+- Format: `cargo fmt --check`
 
 - `README.md` / `README_ko.md`: purpose, design decisions, and official sources to re-check before implementing.
 - `references/STEP_1_INITIAL_CREATION*.md`: Stage 1, which covers initial harness creation.

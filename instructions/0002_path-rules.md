@@ -1,8 +1,8 @@
 # 0002 — 1단계: 경로 규칙
 
 > Entity UUID: 01a1e24a-c2e2-7f95-aae3-0dd8a8e6bbf2   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입 — `feature/path-rules/01a1e24a`)
+> Status: IN_PROGRESS
+> Branch: `feature/path-rules/01a1e24a`
 > 명세: `references/STEP_1_INITIAL_CREATION.md` / `_ko.md` — §1
 
 ## 목표

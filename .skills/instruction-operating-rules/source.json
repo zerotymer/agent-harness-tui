@@ -1,0 +1,19 @@
+{
+  "source": "md.zerotymer.net",
+  "uuid": "366d5d35-7b46-4d5c-b5dd-3e53d48d7492",
+  "type": "skill",
+  "locales": {
+    "en": {
+      "file": "SKILL.md",
+      "updatedAt": "2026-06-08T13:12:36.602Z",
+      "contentHash": "sha256:70d80324bbbb59888e8ca3fc7f0e8eeea160ced36ccc3772e168c28284db2e57"
+    },
+    "ko": {
+      "file": "SKILL_ko.md",
+      "updatedAt": "2026-06-08T13:12:12.498Z",
+      "contentHash": "sha256:00d341f42b3a333799900f81b02947a400da3382b42d732b209390bb9c1a2f28"
+    }
+  },
+  "importedAt": "2026-11-16",
+  "localChanges": "Frontmatter normalized. Local edits (wiki original unchanged): UUID registry removed (local UUIDs only); git-branch-guideline UUID corrected; branch formats aligned; session path .claude/session; spec path references/; skill paths .skills/."
+}

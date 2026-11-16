@@ -1,0 +1,19 @@
+{
+  "source": "md.zerotymer.net",
+  "uuid": "b3230cd0-6081-4570-9bda-183543f585e9",
+  "type": "skill",
+  "locales": {
+    "en": {
+      "file": "SKILL.md",
+      "updatedAt": "2026-05-25T04:15:04.756Z",
+      "contentHash": "sha256:07044193a20d596686c2bbbd460b7d1ba879a5b3db783b3ade8e0221db446daf"
+    },
+    "ko": {
+      "file": "SKILL_ko.md",
+      "updatedAt": "2026-05-25T04:14:06.643Z",
+      "contentHash": "sha256:68de4b758870a776c3ab85e146d645e55cff338e8479d132bc83b2f545eba962"
+    }
+  },
+  "importedAt": "2026-11-16",
+  "localChanges": "frontmatter normalized to skill frontmatter (name, description); body unchanged"
+}

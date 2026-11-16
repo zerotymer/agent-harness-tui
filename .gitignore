@@ -1,0 +1,24 @@
+# Generated outputs (one-way, never read back as input)
+.output/
+
+# Harness local state and backups (machine/worktree-local)
+.harness/
+
+# Optional backlog database (ignored even before it is enabled)
+agent.db
+agent.db-wal
+agent.db-shm
+agent.db-journal
+
+# Agent session records and local settings (local runtime state)
+.claude/session
+.claude/session.log
+.claude/settings.local.json
+.codex/session
+.codex/session.log
+
+# Credentials
+.env
+.env.*
+!.env.example
+.credentials.json

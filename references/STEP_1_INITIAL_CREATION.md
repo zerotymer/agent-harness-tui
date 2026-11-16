@@ -17,8 +17,8 @@ Implement this instruction in a separate application repository selected for dev
 | Item | Default path | Configurability | Git policy |
 | --- | --- | --- | --- |
 | Active instructions | `instructions/` | Fixed in Stage 1 | Track |
-| Completed instructions | `instructions/completed/` | Follows instruction root | Track |
-| Instruction history | `instructions/instructions.log` | Follows instruction root | Track |
+| Completed instructions | `instructions/.completed/` | Follows instruction root | Track |
+| Completion log | `instructions/completed.log` | Follows instruction root | Track |
 | References | `references/` | User configurable | Track |
 | Outputs | `.output/` | User configurable | Ignore |
 | Canonical skills | `.skills/` | Default fixed in Stage 1 | Track |
@@ -30,11 +30,11 @@ An output-directory override must retain a dot-prefixed directory name. Windows 
 
 Generate project guidance describing these rules; the initializer itself is not a task execution or instruction-completion system.
 
-- Instructions are Markdown documents. Newly authored instructions use `{name}.md` and equivalent `{name}_ko.md` files with one logical instruction ID.
+- Instructions are Markdown documents written in Korean, one file per instruction: `instructions/NNNN_short-name.md`, where `NNNN` is a 4-digit sequence starting at `0001`. Each instruction header carries a stable UUID and a status (`TODO`, `IN_PROGRESS` or `DONE`). Instructions are not translated. English/Korean pairs apply only to agent-facing reference, skill and guidance documents.
 - Pending and completed instructions are both tracked in Git.
-- On explicit task completion, move both language files to `instructions/completed/`. Do not infer completion from an agent response or session ending.
-- Append instruction events to `instructions/instructions.log` in recording order. Suggested fields: event ID, instruction ID, local sequence, timestamp with offset, event type, and project-relative path.
-- Event IDs must remain unique across independent working copies. A sequence establishes local append order, not a globally unique or chronological order across Git branches.
+- On explicit task completion, set the status to `DONE` and move the file to `instructions/.completed/<UUID>.md`. Do not infer completion from an agent response or session ending.
+- Append one line per completed instruction to `instructions/completed.log` in recording order, using the format `UUID | summary | timestamp with offset`.
+- Instruction UUIDs must remain unique across independent working copies. Log line order and `NNNN` sequences are local; they are not a globally unique or chronological order across Git branches.
 - A writer must lock the log, avoid overwriting old records, and expose merge conflicts rather than silently discard or renumber history. Cross-worktree reconciliation belongs to Stage 2.
 - The initializer may create a missing empty log, but must not truncate an existing log or record initialization as a task event.
 - `agent.db` is optional. Store the choice and reserve its project-relative path, but do not create a schema, migrate, or modify an existing database before the user supplies the real file and contract.
@@ -80,7 +80,7 @@ Use the following initial file contract, with explicit schema versions:
 
 ## 6. Git policy
 
-Track active/completed instructions, `instructions.log`, references, canonical skills, shared configuration/lock files and root guidance.
+Track active/completed instructions, `completed.log`, references, canonical skills, shared configuration/lock files and root guidance.
 
 Generate bounded `.gitignore` entries for configured outputs, `.harness/`, `agent.db`, `agent.db-wal`, `agent.db-shm`, `agent.db-journal`, and reproducible adapter copies where appropriate. Ignore backlog paths even before enabling the database to prevent accidental later addition. Preserve unrelated ignore rules.
 

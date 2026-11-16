@@ -10,8 +10,8 @@ These documents are implementation instructions for a future software repository
 
 | Stage | English instruction | Korean translation | Scope |
 | --- | --- | --- | --- |
-| 1 | [STEP_1_INITIAL_CREATION.md](STEP_1_INITIAL_CREATION.md) | [STEP_1_INITIAL_CREATION_ko.md](STEP_1_INITIAL_CREATION_ko.md) | Standalone TUI, initial generation, remote skills, configuration and baseline state |
-| 2 | [STEP_2_ADDITIONAL_FEATURES.md](STEP_2_ADDITIONAL_FEATURES.md) | [STEP_2_ADDITIONAL_FEATURES_ko.md](STEP_2_ADDITIONAL_FEATURES_ko.md) | Bounded updates, overrides, modes, hooks, Git worktree, Worktrunk and Docktree |
+| 1 | [STEP_1_INITIAL_CREATION.md](references/STEP_1_INITIAL_CREATION.md) | [STEP_1_INITIAL_CREATION_ko.md](references/STEP_1_INITIAL_CREATION_ko.md) | Standalone TUI, initial generation, remote skills, configuration and baseline state |
+| 2 | [STEP_2_ADDITIONAL_FEATURES.md](references/STEP_2_ADDITIONAL_FEATURES.md) | [STEP_2_ADDITIONAL_FEATURES_ko.md](references/STEP_2_ADDITIONAL_FEATURES_ko.md) | Bounded updates, overrides, modes, hooks, Git worktree, Worktrunk and Docktree |
 
 Complete and validate Stage 1 before starting Stage 2. Worktrunk belongs to Stage 2 because it manages Git worktrees; it is not a prerequisite for initial harness creation.
 
@@ -21,7 +21,7 @@ Complete and validate Stage 1 before starting Stage 2. Worktrunk belongs to Stag
 - The current working directory is the project root. Stage 1 must not redirect execution to a parent repository or primary worktree.
 - Track pending and completed instructions, instruction history, references, skills and shared harness configuration in the target project's Git repository.
 - Keep generated outputs, optional SQLite backlog data, credentials and machine-local state outside Git.
-- Write generated instruction documents in English with equivalent `_ko.md` translations. Preserve imported source documents rather than inventing translations.
+- Write work instructions in Korean only (`instructions/NNNN_name.md`). Write agent-facing reference, skill and guidance documents in English with equivalent `_ko.md` translations. Preserve imported source documents rather than inventing translations.
 - Use maintained stable dependencies. Do not introduce deprecated APIs or compatibility shims for end-of-support operating systems.
 - External systems are optional integration candidates, not services to build as part of these instructions.
 

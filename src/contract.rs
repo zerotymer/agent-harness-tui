@@ -235,7 +235,7 @@ impl Default for HarnessConfig {
             },
             backlog: BacklogConfig {
                 enabled: false,
-                path: crate::paths::Layout::backlog(),
+                path: crate::paths::Layout::default().backlog(),
             },
             agents: Vec::new(),
             sources: Vec::new(),
@@ -265,9 +265,11 @@ impl ContractFile for HarnessConfig {
 
     fn problems(&self) -> Vec<String> {
         let mut p = Vec::new();
-        if self.backlog.path.as_str() != BACKLOG_FILE {
+        // `agent.db` at the root is what v0.1.0 wrote; it never created a file.
+        let expected = self.layout().backlog();
+        if self.backlog.path != expected && self.backlog.path.as_str() != BACKLOG_FILE {
             p.push(format!(
-                "backlog.path is fixed to `{BACKLOG_FILE}` in Stage 1, got `{}`",
+                "backlog.path must be `{expected}`, got `{}`",
                 self.backlog.path
             ));
         }

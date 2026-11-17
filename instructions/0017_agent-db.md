@@ -1,0 +1,68 @@
+# 0017 — agent.db 생성 (백로그·지시서 상태, 관리 스크립트 포함)
+
+> Entity UUID: 01a1e6cf-6baa-7e82-8ce7-3c875bafb0d4   (로컬 생성, UUIDv7)
+> Status: IN_PROGRESS
+> Branch: `feature/agent-db/01a1e6cf`
+> 근거: GitHub 이슈 #21 "agent.db", 사용자 요청 (2026-11-17) "agent.db 생성시 해당 내용으로 진행, instructions/ 경로에 배치(스크립트 포함)"
+
+## 목표
+사용자가 백로그(agent.db) 사용을 선택하면, 이슈 #21의 규약에 따라 지시서 루트(0016, 기본 `instructions`)에 다음을 생성한다.
+- `agent.db`: `backlog`·`instructions` 테이블
+- 관리 스크립트 `agent-db.sh`
+
+용도:
+1. 백로그: 에이전트가 해야 할 작업 기록
+2. 진행 중 작업: 지시서 상태 기록
+
+## 선행 조건
+- 0016 (지시서 경로 입력)
+- 명세 변경 (영/한 동시). 지금 명세는 "사용자가 실제 파일과 규약을 제공하기 전에는 스키마를 만들지 않는다"이다. 이슈 #21로 규약이 제공되었으므로 다음을 반영한다.
+  - `STEP_1_INITIAL_CREATION*.md` §1 표·본문: `agent.db` 위치를 "지시서 루트/agent.db"로 바꾸고, 스키마·스크립트 생성을 허용한다.
+  - `STEP_2_ADDITIONAL_FEATURES*.md` 109행: "규약 제공 후 구현"을 제공된 규약 참조로 갱신한다.
+
+## 규약 (이슈 #21 원문 기준)
+- 스키마: 이슈 #21의 `init_schema`를 그대로 따른다.
+  - `PRAGMA journal_mode=WAL`, `foreign_keys=ON`
+  - `backlog`(id, title, description, status 기본 `created`, created_at·updated_at, created_by·updated_by)
+  - `instructions`(uuid PK, title, status 기본 `created`, 시각, 작성자)
+  - `idx_backlog_status`, `idx_instructions_status` 인덱스
+- 스크립트: 이슈 #21의 `agent-db.sh` 명령 집합을 따른다.
+  - `schema`, `timestamp`, `init`, `migrate`, `verify`
+  - `instruction-log-bootstrap`, `instruction-log-reconcile`
+  - `backlog-*`, `instruction-*`
+
+## 결정 사항 (사용자 확인, 2026-11-17)
+1. **신뢰 원칙:** 완료 기록의 원본은 명세의 `completed.log`(`UUID | 내용 | 일시`, 추가만 허용)다. 이슈 #21 스크립트는 참고용이다. `instructions.log`는 만들지 않는다. 스크립트는 `completed.log`를 읽어 DB를 맞추고, 완료를 기록할 때는 끝에 한 줄만 추가한다.
+2. **DB 생성:** TUI는 `rusqlite`로 `agent.db`를 만들고 스키마를 초기화한다. `sqlite3` CLI 호출은 사용자 측 스크립트에서만 한다.
+3. **스크립트:** bash용 `agent-db.sh`와 PowerShell용 `agent-db.ps1`을 모두 생성한다. 경로는 스크립트 위치(지시서 루트)를 기준으로 계산한다. `sqlite3`가 없으면 스크립트가 오류로 안내한다. 대체 shim은 만들지 않는다.
+4. **작성자 값:** `created_by`와 `updated_by`는 환경변수 `AGENT_DB_ACTOR`로 바꿀 수 있다. 기본값은 `agent`다. 스크립트는 이 목적에 맞게 수정해도 된다.
+
+## 범위
+- 포함:
+  - TUI에서 백로그 사용을 선택하면 지시서 루트에 `agent.db`, `agent-db.sh`, `agent-db.ps1`을 만든다. 셋 다 create-only이며, 기존 DB나 사용자가 고친 스크립트는 보존한다.
+  - 스키마는 `templates/agent-db.schema.sql` 하나로 관리한다. Rust(rusqlite, bundled)는 이 파일로 DB를 만들고, 두 스크립트 템플릿에도 같은 내용이 들어간다.
+  - DB는 적용 전까지 프로젝트에 쓰지 않는다. 미리보기 단계에서 임시 파일에 만들어 둔 바이트를 적용할 때 기록한다.
+  - `backlog.path`는 `<지시서 루트>/agent.db`로 바꾼다. v0.1.0 설정의 `agent.db`도 유효한 값으로 받는다(당시에는 파일을 만들지 않았음).
+  - `.gitignore` 관리 블록의 DB·`-wal`·`-shm`·`-journal` 규칙이 새 경로를 따른다. 스크립트는 임시 파일을 만들지 않으므로(SQL을 stdin으로 전달) 무시 규칙을 더 추가하지 않는다.
+  - 지침 문서에 스크립트 사용법, `completed.log` 기준 원칙, `AGENT_DB_ACTOR` 안내를 넣는다.
+- 제외:
+  - 실행 권한 부여. 지침에는 `bash …/agent-db.sh`, `pwsh -File …/agent-db.ps1`로 실행하도록 안내한다.
+  - 기존 DB 마이그레이션·스키마 변경, worktree 간 DB 공유, TUI 안에서 백로그 조회·편집
+
+## 작업 항목
+1. 명세 수정(영/한) 및 결정 사항 반영
+2. 스크립트·스키마 템플릿 추가, 생성·보존 로직
+3. 경로·gitignore·contract 갱신
+4. 테스트:
+   - 백로그 선택 시 파일 생성 위치(기본값과 사용자 지정 지시서 루트)
+   - 기존 DB 보존
+   - 미선택 시 파일 미생성
+   - gitignore 규칙
+   - 생성된 스크립트 종단 테스트(초기화, 백로그 추가·완료, 지시서 등록·완료, 로그 추가만 허용, 중복 거부, `AGENT_DB_ACTOR`). bash는 `bash`와 `sqlite3`가 있을 때, PowerShell은 `pwsh`/`powershell`과 `sqlite3`가 있을 때 실행하고 없으면 건너뛴다
+
+## 완료 기준 (DoD)
+- [ ] 테스트 포함 (fmt·clippy·test 통과)
+- [ ] 명세 영/한 동시 수정
+- [ ] 가드레일 준수 확인
+- [ ] 브랜치에서 작업 후 PR 준비 (main 직접 push 금지), PR에 `Closes #21`
+- [ ] 완료는 사용자가 명시적으로 선언한다

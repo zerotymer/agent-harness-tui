@@ -22,7 +22,7 @@ Implement this instruction in this repository. Preserve existing user files. Do 
 | References | `references/` | User configurable | Track |
 | Outputs | `.output/` | User configurable | Ignore |
 | Canonical skills | `.skills/` | Default fixed in Stage 1 | Track |
-| Optional backlog | `agent.db` | Enable/disable only | Ignore |
+| Optional backlog | `instructions/agent.db` | Enable/disable only; follows instruction root | Ignore (the `agent-db.sh`/`agent-db.ps1` scripts are tracked) |
 
 An output-directory override must retain a dot-prefixed directory name. Windows hidden attributes are a separate platform concern; a leading dot alone does not set that attribute. Explain and report any inability to apply the selected hidden attribute.
 
@@ -38,7 +38,8 @@ Generate project guidance describing these rules; the initializer itself is not 
 - Instruction UUIDs must remain unique across independent working copies. Log line order and `NNNN` sequences are local; they are not a globally unique or chronological order across Git branches.
 - A writer must lock the log, avoid overwriting old records, and expose merge conflicts rather than silently discard or renumber history. Cross-worktree reconciliation belongs to Stage 2.
 - The initializer may create a missing empty log, but must not truncate an existing log or record initialization as a task event.
-- `agent.db` is optional. Store the choice and reserve its project-relative path, but do not create a schema, migrate, or modify an existing database before the user supplies the real file and contract.
+- `agent.db` is optional and lives in the instruction root. Store the choice and reserve its project-relative path. When enabled, create it with the schema the user supplied (GitHub issue #21): a `backlog` table for work the agent should do and an `instructions` table for instruction status, both with `status` (default `created`), creation/update timestamps and `created_by`/`updated_by`, plus status indexes and WAL mode. Next to it, create `agent-db.sh` (bash) and `agent-db.ps1` (PowerShell) management scripts that call the user's `sqlite3` CLI. The database and scripts are create-only: never migrate or modify an existing database, and never overwrite edited scripts.
+- `completed.log` stays the source of truth for completed instructions. The scripts sync the database from it and only append to it. They record the author from `AGENT_DB_ACTOR` (default `agent`).
 
 ## 3. Shared configuration and local state
 
@@ -88,7 +89,7 @@ Use the following initial file contract, with explicit schema versions:
 
 Track active/completed instructions, `completed.log`, references, canonical skills, shared configuration/lock files and root guidance.
 
-Generate bounded `.gitignore` entries for configured outputs, `.harness/`, `agent.db`, `agent.db-wal`, `agent.db-shm`, `agent.db-journal`, and reproducible adapter copies where appropriate. Ignore backlog paths even before enabling the database to prevent accidental later addition. Preserve unrelated ignore rules.
+Generate bounded `.gitignore` entries for configured outputs, `.harness/`, the backlog database and its `-wal`, `-shm` and `-journal` files, and reproducible adapter copies where appropriate. Ignore backlog paths even before enabling the database to prevent accidental later addition. Preserve unrelated ignore rules.
 
 Inspect nested or parent ignore effects when Git is available. If a supposedly shared path is ignored, report it. If an ignored destination is already tracked, explain that `.gitignore` does not untrack it and do not change the index automatically. Do not commit or push. Empty directories are not Git objects; do not claim they will be shared until they contain tracked files.
 
@@ -113,7 +114,7 @@ If initialized state exists, show its summary and permit inspection or a no-op v
 - Meaningful tests cover path escape/collision rejection, generated guidance boundaries, import traversal rejection, Git-ignore behavior, and recovery from interrupted application.
 - Validate the supported agent adapters against their current official contracts. Document unsupported strategies instead of claiming support.
 - Exercise the root/path and terminal behavior on Linux, Windows and macOS; list any platform not actually verified.
-- The delivered application contains no worktree/service management or runtime hook execution, and does not create an assumed SQLite schema.
+- The delivered application contains no worktree/service management or runtime hook execution, and creates no SQLite schema other than the supplied `agent.db` schema.
 
 ## Deliverables
 

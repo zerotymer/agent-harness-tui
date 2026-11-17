@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 pub const DEFAULT_INSTRUCTIONS_DIR: &str = "instructions";
 /// Fixed in Stage 1.
 pub const SKILLS_DIR: &str = ".skills";
-/// Enable/disable only in Stage 1.
+/// Backlog file name inside the instruction root.
 pub const BACKLOG_FILE: &str = "agent.db";
 pub const DEFAULT_REFERENCES_DIR: &str = "references";
 pub const DEFAULT_OUTPUT_DIR: &str = ".output";
@@ -300,8 +300,8 @@ impl Layout {
     pub fn skills() -> RelPath {
         RelPath(SKILLS_DIR.into())
     }
-    pub fn backlog() -> RelPath {
-        RelPath(BACKLOG_FILE.into())
+    pub fn backlog(&self) -> RelPath {
+        self.instructions.join(BACKLOG_FILE)
     }
 
     /// Top-level managed entries that must not overlap.
@@ -311,8 +311,6 @@ impl Layout {
             (self.references.clone(), EntryKind::Dir),
             (self.output.clone(), EntryKind::Dir),
             (Self::skills(), EntryKind::Dir),
-            // Reserved even when disabled, so it is always checked.
-            (Self::backlog(), EntryKind::File),
         ]
     }
 
@@ -341,7 +339,9 @@ impl Layout {
                 }
             }
         }
-        for (rel, kind) in &entries {
+        // Inside the instruction root; reserved even when disabled.
+        let backlog = [(self.backlog(), EntryKind::File)];
+        for (rel, kind) in entries.iter().chain(&backlog) {
             if let Some(e) = collision(root, rel, *kind) {
                 errors.push(e);
             }
@@ -630,12 +630,12 @@ mod tests {
     fn rejects_collisions_with_existing_files() {
         let p = TempProject::new();
         fs::write(p.0.join("references"), "file, not dir").unwrap();
-        fs::create_dir(p.0.join("agent.db")).unwrap();
+        fs::create_dir_all(p.0.join("instructions/agent.db")).unwrap();
         fs::write(p.0.join("parent"), "").unwrap();
         let root = p.root();
         let errs = Layout::default().validate(&root).unwrap_err();
         assert!(errs.contains(&PathError::Collision("references".into())));
-        assert!(errs.contains(&PathError::Collision("agent.db".into())));
+        assert!(errs.contains(&PathError::Collision("instructions/agent.db".into())));
         let errs = layout("parent/child", ".output")
             .validate(&root)
             .unwrap_err();

@@ -472,6 +472,7 @@ impl App {
     fn config(&self) -> Result<HarnessConfig, String> {
         let layout = self.layout()?;
         let mut config = HarnessConfig::default();
+        config.backlog.path = layout.backlog();
         config.paths.instructions = layout.instructions;
         config.paths.references = layout.references;
         config.paths.output = layout.output;
@@ -760,8 +761,8 @@ impl App {
             Line::raw("고정 경로 (1단계에서 변경 불가):"),
             Line::raw(format!("  {}/  스킬 원본", Layout::skills())),
             Line::raw(format!(
-                "  {}  백로그 경로 (사용 여부만 선택)",
-                Layout::backlog()
+                "  {}/agent.db·agent-db.sh·agent-db.ps1  백로그 (지시서 경로를 따름)",
+                self.instructions.trim_end_matches('/')
             )),
         ]
     }
@@ -1159,6 +1160,40 @@ mod tests {
         assert!(config.contains(r#"instructions = "docs/tasks""#));
         let guide = fs::read_to_string(p.0.join("CLAUDE.md")).unwrap();
         assert!(guide.contains("`docs/tasks/completed.log`"));
+    }
+
+    #[test]
+    fn backlog_creates_db_and_scripts_and_keeps_existing_db() {
+        let p = TempProject::new();
+        let run = |p: &TempProject| {
+            let mut app = p.app();
+            key(&mut app, KeyCode::Enter);
+            key(&mut app, KeyCode::Up); // last row: backlog toggle
+            key(&mut app, KeyCode::Char(' '));
+            assert!(screen(&app, 100, 30).contains("instructions/agent.db"));
+            for _ in 0..4 {
+                key(&mut app, KeyCode::Enter);
+            }
+            assert_eq!(app.step, Step::Done);
+        };
+        run(&p);
+        for f in ["agent.db", "agent-db.sh", "agent-db.ps1"] {
+            assert!(p.0.join("instructions").join(f).is_file(), "{f}");
+        }
+        assert!(!p.0.join("agent.db").exists());
+        let config = fs::read_to_string(p.0.join("harness.toml")).unwrap();
+        assert!(config.contains(r#"path = "instructions/agent.db""#));
+
+        // A fresh project that already has a database keeps it untouched.
+        let q = TempProject::new();
+        fs::create_dir(q.0.join("instructions")).unwrap();
+        fs::write(q.0.join("instructions/agent.db"), b"user data").unwrap();
+        run(&q);
+        assert_eq!(
+            fs::read(q.0.join("instructions/agent.db")).unwrap(),
+            b"user data"
+        );
+        assert!(q.0.join("instructions/agent-db.sh").is_file());
     }
 
     #[test]

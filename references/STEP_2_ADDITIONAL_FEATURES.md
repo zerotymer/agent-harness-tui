@@ -106,7 +106,7 @@ Document the following optional systems and integration seams. Do not build or d
 | --- | --- |
 | `md.zerotymer.net` or another skill/guidance source | Catalog, documents, revisions and authentication |
 | Hook/harness-template repository | Reusable profiles and platform/agent compatibility metadata |
-| Backlog/task-state system | Optional instruction linkage; SQLite adapter only after the real `agent.db` contract is supplied |
+| Backlog/task-state system | Optional instruction linkage. The `agent.db` contract is the one in the Stage 1 spec §2 (issue #21); schema changes need a new user-supplied contract |
 | Credential facility | Keep actual tokens outside shared project files |
 
 Define connection checks, bounded timeouts, API/version capability reporting and stale-cache handling. Existing local documents must remain usable during a remote outage. Do not require a daemon, web server, queue or central database for the TUI to work.

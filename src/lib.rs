@@ -1,6 +1,7 @@
 //! Agent harness TUI library.
 
 pub mod apply;
+pub mod backlog;
 pub mod blocks;
 pub mod contract;
 pub mod gitignore;

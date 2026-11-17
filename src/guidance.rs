@@ -50,6 +50,7 @@ pub fn plan_items(
     let dirs = vec![layout.instructions.clone(), layout.completed()];
     // Never truncates an existing log and records no init event.
     let mut desired = vec![Desired::create_only(layout.completed_log(), "")];
+    desired.extend(crate::backlog::plan_items(config)?);
     let mut seen = Vec::new();
     for agent in config.agents.iter().map(|a| a.id) {
         if seen.contains(&agent) {
@@ -129,12 +130,14 @@ pub fn render(config: &HarnessConfig, agent: AgentId, lang: Lang) -> String {
         ),
     );
     if config.backlog.enabled {
+        let sh = inst.join(crate::backlog::SH_FILE);
+        let ps1 = inst.join(crate::backlog::PS1_FILE);
         push(
             format!(
-                "- `{db}`: optional backlog, enabled. Do not create a schema, migrate, or modify it unless the user provides the file and its conventions."
+                "- `{db}`: backlog (`backlog` table) and instruction status (`instructions` table), not tracked by Git. Manage it with `bash {sh} <command>` or `pwsh -File {ps1} <command>` (run without arguments for the command list; needs the `sqlite3` CLI). `{log}` stays the source of truth for completed instructions: the scripts only append to it and sync the database from it. Set `AGENT_DB_ACTOR` to record who made a change. Do not change the schema."
             ),
             format!(
-                "- `{db}`: 선택적 백로그, 사용 중. 사용자가 파일과 규약을 제공하기 전에는 스키마 생성·마이그레이션·수정을 하지 않는다."
+                "- `{db}`: 백로그(`backlog` 테이블)와 지시서 상태(`instructions` 테이블). Git으로 추적하지 않는다. `bash {sh} <command>` 또는 `pwsh -File {ps1} <command>`로 관리한다(인자 없이 실행하면 명령 목록이 나오며 `sqlite3` CLI가 필요하다). 완료된 지시서의 기준은 `{log}`이다. 스크립트는 이 로그에 한 줄을 추가하기만 하고, 데이터베이스는 로그를 따라 맞춘다. 변경자를 기록하려면 `AGENT_DB_ACTOR`를 설정한다. 스키마는 바꾸지 않는다."
             ),
         );
     } else {
@@ -365,7 +368,7 @@ mod tests {
                 "docs/참조 문서/",
                 ".out/",
                 "instructions/.completed/<UUID>.md",
-                "agent.db-wal",
+                "instructions/agent.db-wal",
             ] {
                 assert!(code_spans(&en).contains(must), "{must}");
             }

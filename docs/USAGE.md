@@ -54,7 +54,7 @@ Keys: ↑↓ move, Space toggles, Enter goes to the next step (on step 4 it runs
 | `.claude/skills/<id>/`, `.agents/skills/<id>/` | Skill copies for agents set to copy placement | Ignore (regenerated) |
 | `harness.toml`, `harness.lock.json` | Shared settings and resolved imports | Track |
 | `.harness/state.json`, `.harness/backups/` | Local applied state and backups | Ignore |
-| `.output/` (configurable) | Generated output; never read back as input | Ignore |
+| `.output/` (configurable) | Temporary local output, not shared; never read back as input | Ignore |
 | `.gitignore` | A managed block with the ignore rules above; your other rules are kept | Track |
 
 The tool changes existing files only inside managed blocks that start with `agent-harness:begin` and end with `agent-harness:end`. If the markers are damaged, or you edited inside a block, the preview shows a conflict, and the tool never rewrites the whole file. File formats are documented in [`references/HARNESS_STATE_CONTRACT.md`](../references/HARNESS_STATE_CONTRACT.md).

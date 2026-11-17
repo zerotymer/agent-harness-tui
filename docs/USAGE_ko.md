@@ -54,7 +54,7 @@ agent-harness-tui
 | `.claude/skills/<id>/`, `.agents/skills/<id>/` | 복사 배치를 고른 에이전트의 스킬 복사본 | 제외 (다시 생성됨) |
 | `harness.toml`, `harness.lock.json` | 공유 설정과 확정된 가져오기 | 추적 |
 | `.harness/state.json`, `.harness/backups/` | 로컬 적용 상태와 백업 | 제외 |
-| `.output/` (변경 가능) | 생성 산출물. 다시 입력으로 읽지 않음 | 제외 |
+| `.output/` (변경 가능) | 임시 산출물. 로컬 전용이며 공유하지 않음. 다시 입력으로 읽지 않음 | 제외 |
 | `.gitignore` | 위 제외 규칙을 담은 관리 블록. 사용자의 다른 규칙은 그대로 둠 | 추적 |
 
 도구는 기존 파일을 `agent-harness:begin`으로 시작해 `agent-harness:end`로 끝나는 관리 블록 안에서만 바꾼다. 마커가 손상됐거나 사용자가 블록 안을 수정했다면 미리보기에서 충돌로 표시하고, 파일 전체를 다시 쓰지 않는다. 파일 형식은 [`references/HARNESS_STATE_CONTRACT_ko.md`](../references/HARNESS_STATE_CONTRACT_ko.md)에 정리되어 있다.

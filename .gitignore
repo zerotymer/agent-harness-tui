@@ -1,4 +1,4 @@
-# Generated outputs (one-way, never read back as input)
+# Temporary local outputs (not shared, one-way, never read back as input)
 .output/
 
 # Harness local state and backups (machine/worktree-local)

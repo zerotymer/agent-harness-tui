@@ -20,7 +20,7 @@ Implement this instruction in this repository. Preserve existing user files. Do 
 | Completed instructions | `instructions/.completed/` | Follows instruction root | Track |
 | Completion log | `instructions/completed.log` | Follows instruction root | Track |
 | References | `references/` | User configurable | Track |
-| Outputs | `.output/` | User configurable | Ignore |
+| Temporary outputs (local, not shared) | `.output/` | User configurable | Ignore |
 | Canonical skills | `.skills/` | Default fixed in Stage 1 | Track |
 | Optional backlog | `instructions/agent.db` | Enable/disable only; follows instruction root | Ignore (the `agent-db.sh`/`agent-db.ps1` scripts are tracked) |
 

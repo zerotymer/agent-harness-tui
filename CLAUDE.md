@@ -31,7 +31,7 @@ The spec is the source of truth. When an imported skill conflicts with the spec 
 - **Do not invent external contracts:** do not guess endpoints or event names for `md.zerotymer.net`, agent hook contracts, Worktrunk (`.config/wt.toml`), or Docktree. Verify them against current official docs first. Unsupported features must show as unavailable; never add shims for them. The one exception is the gateway catalog list/search dummy that the Stage 1 spec §4 allows.
 - **Git policy:**
   - Track `instructions/` (including `.completed/` and `completed.log`), `references/`, `.skills/`, and the root guidance files.
-  - Ignore `.output/`, `.harness/`, `agent.db*`, agent session files (`.claude/session*`, `.codex/session*`), and credentials. `.output/` is one-way generated output and is never read back as input.
+  - Ignore `.output/`, `.harness/`, `agent.db*`, agent session files (`.claude/session*`, `.codex/session*`), and credentials. `.output/` holds temporary, local-only output that is not shared; it is one-way and never read back as input.
   - Keep `.gitignore` in sync whenever a new local-state or output path appears.
   - Never commit or push on the user's behalf.
 - **Instruction lifecycle** (follows the `instruction-operating-rules` skill):

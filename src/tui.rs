@@ -146,6 +146,9 @@ impl App {
             return;
         }
         match key.code {
+            // Esc on the first step and `q` outside text fields quit, like Ctrl+C.
+            KeyCode::Esc if self.step == Step::Root => self.quit = true,
+            KeyCode::Char('q') if !self.focus_is_input() => self.quit = true,
             KeyCode::Esc => self.back(),
             KeyCode::Up => self.move_focus(-1),
             KeyCode::Down => self.move_focus(1),
@@ -588,10 +591,11 @@ impl App {
     fn keys(&self) -> String {
         match self.step {
             Step::Root if self.initialized() || self.loaded.is_err() => {
-                "↑↓ 스크롤  Enter·Ctrl+C 종료".into()
+                "↑↓ 스크롤  Enter·Esc·q 종료".into()
             }
-            Step::Preview => "↑↓ PgUp PgDn 스크롤  Enter 적용  Esc 이전  Ctrl+C 취소".into(),
-            Step::Done => "↑↓ 스크롤  Enter·Ctrl+C 종료".into(),
+            Step::Root => "Enter 다음  Esc·q 종료".into(),
+            Step::Preview => "↑↓ PgUp PgDn 스크롤  Enter 적용  Esc 이전  q·Ctrl+C 취소".into(),
+            Step::Done => "↑↓ 스크롤  Enter·q 종료".into(),
             Step::Skills => {
                 "↑↓ 이동  Space 선택  Enter 버튼 실행·다음  Esc 이전  Ctrl+C 취소".into()
             }
@@ -1076,6 +1080,30 @@ mod tests {
         key(&mut app, KeyCode::Esc);
         assert_eq!(app.step, Step::Paths);
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        assert!(app.quit);
+        assert_eq!(files_in(&p.0), 0);
+    }
+
+    #[test]
+    fn esc_on_first_step_and_q_quit_without_writing() {
+        let p = TempProject::new();
+        let mut app = p.app();
+        key(&mut app, KeyCode::Esc);
+        assert!(app.quit, "Esc on the first step quits");
+
+        let mut app = p.app();
+        key(&mut app, KeyCode::Char('q'));
+        assert!(app.quit, "q quits outside text fields");
+
+        // On the paths step the first field is a text input: `q` is typed.
+        let mut app = p.app();
+        key(&mut app, KeyCode::Enter);
+        key(&mut app, KeyCode::Char('q'));
+        assert!(!app.quit);
+        assert_eq!(app.references, "referencesq");
+        // The last row (backlog toggle) is not an input: `q` quits.
+        key(&mut app, KeyCode::Up);
+        key(&mut app, KeyCode::Char('q'));
         assert!(app.quit);
         assert_eq!(files_in(&p.0), 0);
     }

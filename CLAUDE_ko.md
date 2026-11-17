@@ -31,7 +31,7 @@
 - **외부 계약을 지어내지 않음:** `md.zerotymer.net`, 에이전트 훅 계약, Worktrunk(`.config/wt.toml`), Docktree의 엔드포인트나 이벤트 이름을 추측하지 않습니다. 먼저 최신 공식 문서로 확인합니다. 지원하지 않는 기능은 사용 불가로 표시하고, 호환용 shim은 절대 추가하지 않습니다. 예외는 1단계 명세 §4가 허용하는 게이트웨이 목록·검색 더미뿐입니다.
 - **Git 정책:**
   - `instructions/`(`.completed/`와 `completed.log` 포함), `references/`, `.skills/`, 루트 안내 문서는 추적합니다.
-  - `.output/`, `.harness/`, `agent.db*`, 에이전트 세션 파일(`.claude/session*`, `.codex/session*`), 자격 증명은 무시합니다. `.output/`은 단방향 산출물이며 다시 입력으로 읽지 않습니다.
+  - `.output/`, `.harness/`, `agent.db*`, 에이전트 세션 파일(`.claude/session*`, `.codex/session*`), 자격 증명은 무시합니다. `.output/`은 공유하지 않는 로컬 임시 산출물이며, 단방향이라 다시 입력으로 읽지 않습니다.
   - 새로운 로컬 상태나 산출물 경로가 생기면 `.gitignore`도 함께 갱신합니다.
   - 사용자 대신 commit이나 push를 하지 않습니다.
 - **지시서 생명주기** (`instruction-operating-rules` 스킬을 따름):

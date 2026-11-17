@@ -20,7 +20,7 @@
 | 완료 지시서 | `instructions/.completed/` | 지시서 루트를 따름 | 포함 |
 | 완료 로그 | `instructions/completed.log` | 지시서 루트를 따름 | 포함 |
 | 참조 문서 | `references/` | 사용자 변경 가능 | 포함 |
-| 산출물 | `.output/` | 사용자 변경 가능 | 제외 |
+| 임시 산출물(로컬, 공유 안 함) | `.output/` | 사용자 변경 가능 | 제외 |
 | 스킬 원본 | `.skills/` | 1단계에서 기본값 고정 | 포함 |
 | 선택적 백로그 | `instructions/agent.db` | 사용 여부만 선택, 지시서 루트를 따름 | 제외 (`agent-db.sh`/`agent-db.ps1` 스크립트는 포함) |
 

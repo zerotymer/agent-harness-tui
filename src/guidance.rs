@@ -123,10 +123,10 @@ pub fn render(config: &HarnessConfig, agent: AgentId, lang: Lang) -> String {
     );
     push(
         format!(
-            "- `{out}/`: generated output. One-way: never read it back as input. Not tracked by Git."
+            "- `{out}/`: temporary output, local only and not shared. One-way: never read it back as input. Not tracked by Git."
         ),
         format!(
-            "- `{out}/`: 생성 산출물. 단방향이며 다시 입력으로 읽지 않는다. Git으로 추적하지 않는다."
+            "- `{out}/`: 임시 산출물. 로컬 전용이며 공유하지 않는다. 단방향이며 다시 입력으로 읽지 않는다. Git으로 추적하지 않는다."
         ),
     );
     if config.backlog.enabled {

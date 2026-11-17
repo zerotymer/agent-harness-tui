@@ -12,3 +12,6 @@
 01a1e370-a94a-7cb5-b953-5a74223cbf50 | 0012 빌드 액션: Linux·Windows·macOS CI(fmt·clippy·test·release 빌드), 실행 파일 워크플로 결과물, 공식 액션 SHA 고정·최소 권한, rust-toolchain.toml | 2026-11-17 08:46:56 +0900
 01a1e6a0-7b4b-76d2-a4fd-85d67d7a494b | 0013 Windows 절대 경로 입력 수정: 원래 구분자로 해석, 존재 부분 canonicalize 후 루트 비교(\\?\ 접두어·대소문자·심볼릭 링크 별칭), 세 OS CI 통과, 보고서 플랫폼 표 갱신 | 2026-11-17 08:46:56 +0900
 01a1e6bc-e798-75bf-8479-34010d74b53b | 0014 태그 기반 릴리스 자동 등록: v* 태그 push로 세 OS 빌드·압축·SHA256SUMS를 GitHub Release로 게시, 게시 작업에만 contents: write | 2026-11-17 08:46:56 +0900
+01a1e6cf-6ba6-79dc-a8b9-f78e6f74cdf9 | 0015 TUI 종료 키: 첫 화면 Esc·입력 칸 밖 q 종료, 키 안내·사용 문서 갱신 (#20, PR #22) | 2026-11-17 09:22:48 +0900
+01a1e6cf-6ba8-7c9e-ab81-70e95764ab08 | 0016 지시서 경로 사용자 입력(기본 instructions): .completed·completed.log·지침·gitignore 연동, 이전 설정 호환, 명세 영/한 수정 (PR #23) | 2026-11-17 09:22:48 +0900
+01a1e6cf-6baa-7e82-8ce7-3c875bafb0d4 | 0017 agent.db 생성: rusqlite(bundled)로 지시서 루트에 DB, bash·PowerShell 관리 스크립트(create-only), completed.log 기준·추가만, AGENT_DB_ACTOR (#21, PR #23) | 2026-11-17 09:22:48 +0900

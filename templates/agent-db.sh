@@ -24,7 +24,8 @@ EOF
 }
 
 fail() { printf 'error: %s\n' "$1" >&2; exit 1; }
-q() { printf "'%s'" "${1//\'/\'\'}"; }
+# Quote via a variable: bash 3.2 (macOS) keeps backslashes in `${1//\'/...}`.
+q() { local sq="'"; printf "'%s'" "${1//$sq/$sq$sq}"; }
 now() { date '+%Y-%m-%d %H:%M:%S %z'; }
 trim() { local s=$1; s=${s#"${s%%[![:space:]]*}"}; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
 

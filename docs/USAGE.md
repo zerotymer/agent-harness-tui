@@ -40,7 +40,7 @@ agent-harness-tui
 | 5. Preview | See every directory and file, each marked create, update, unchanged, preserve or CONFLICT, together with Git warnings. Nothing has been written yet. |
 | 6. Apply and result | Press Enter on the preview to apply. The result lists what was created, updated, unchanged and preserved, and the backup folder. |
 
-Keys: ↑↓ move, Space toggles, Enter goes to the next step (on step 4 it runs the focused button), Esc goes back, Ctrl+C cancels. PgUp/PgDn scroll the preview. Korean text can be typed in path and name fields. The screen adapts to resizing, and below 80 columns the step list folds into one line.
+Keys: ↑↓ move, Space toggles, Enter goes to the next step (on step 4 it runs the focused button), Esc goes back (on the first step it quits), Ctrl+C cancels, and `q` quits outside text fields. PgUp/PgDn scroll the preview. Korean text can be typed in path and name fields. The screen adapts to resizing, and below 80 columns the step list folds into one line.
 
 ## What gets created
 

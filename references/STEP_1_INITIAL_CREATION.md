@@ -16,7 +16,7 @@ Implement this instruction in this repository. Preserve existing user files. Do 
 
 | Item | Default path | Configurability | Git policy |
 | --- | --- | --- | --- |
-| Active instructions | `instructions/` | Fixed in Stage 1 | Track |
+| Active instructions | `instructions/` | User configurable (instruction root) | Track |
 | Completed instructions | `instructions/.completed/` | Follows instruction root | Track |
 | Completion log | `instructions/completed.log` | Follows instruction root | Track |
 | References | `references/` | User configurable | Track |
@@ -30,6 +30,7 @@ An output-directory override must retain a dot-prefixed directory name. Windows 
 
 Generate project guidance describing these rules; the initializer itself is not a task execution or instruction-completion system.
 
+- In this section `instructions/` means the configured instruction root (default `instructions/`).
 - Instructions are Markdown documents written in Korean, one file per instruction: `instructions/NNNN_short-name.md`, where `NNNN` is a 4-digit sequence starting at `0001`. Each instruction header carries a stable UUID and a status (`TODO`, `IN_PROGRESS` or `DONE`). Instructions are not translated. English/Korean pairs apply only to agent-facing reference, skill and guidance documents.
 - Pending and completed instructions are both tracked in Git.
 - On explicit task completion, set the status to `DONE` and move the file to `instructions/.completed/<UUID>.md`. Do not infer completion from an agent response or session ending.
@@ -94,7 +95,7 @@ Inspect nested or parent ignore effects when Git is available. If a supposedly s
 ## 7. TUI flow
 
 1. Confirm the current project root and existing configuration.
-2. Configure reference/output paths and optional backlog use; show fixed paths explicitly.
+2. Configure instruction/reference/output paths and optional backlog use; show fixed paths explicitly.
 3. Select agents and supported skill deployment strategies.
 4. Browse sources, preview and select initial skills.
 5. Preview directories, files, managed guidance blocks, Git rules and conflicts.

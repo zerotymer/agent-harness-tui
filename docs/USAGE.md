@@ -34,7 +34,7 @@ agent-harness-tui
 | Step | What you do |
 | --- | --- |
 | 1. Root and settings | Check the project root. An already initialized project only shows a summary and a no-change check (see below). |
-| 2. Paths and backlog | Set the reference folder (default `references/`) and the output folder (default `.output/`; its name must start with `.`). Turn the optional `agent.db` backlog on or off. Fixed paths are listed but cannot be changed. |
+| 2. Paths and backlog | Set the reference folder (default `references/`), the output folder (default `.output/`; its name must start with `.`), and the instruction folder (default `instructions/`; `.completed/` and `completed.log` go under it). Turn the optional `agent.db` backlog on or off. Fixed paths are listed but cannot be changed. |
 | 3. Agents and placement | Choose Claude Code and/or Codex. For each, pick **copy** (skills are copied where the agent discovers them) or **reference** (guidance points to `.skills/`). Symlink placement is shown as unavailable, with the reason. |
 | 4. Sources and skills | Optionally add skills from a local folder inside the project, or from the wiki gateway. See "Skill sources". |
 | 5. Preview | See every directory and file, each marked create, update, unchanged, preserve or CONFLICT, together with Git warnings. Nothing has been written yet. |
@@ -46,7 +46,7 @@ Keys: ↑↓ move, Space toggles, Enter goes to the next step (on step 4 it runs
 
 | Path | Purpose | Git |
 | --- | --- | --- |
-| `instructions/`, `instructions/.completed/` | Work instructions (fixed) | Track |
+| `instructions/`, `instructions/.completed/` | Work instructions (instruction root, configurable on step 2) | Track |
 | `instructions/completed.log` | Completion log; created empty only if missing, never rewritten | Track |
 | `references/` (configurable) | Reference documents | Track |
 | `.skills/<id>/` | Shared skill packages | Track |

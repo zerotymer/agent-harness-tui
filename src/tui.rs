@@ -60,6 +60,7 @@ pub struct App {
     message: Option<String>,
     pub quit: bool,
     // step 2
+    instructions: String,
     references: String,
     output: String,
     backlog: bool,
@@ -94,6 +95,7 @@ impl App {
             scroll: 0,
             message: None,
             quit: false,
+            instructions: Layout::default().instructions.to_string(),
             references: Layout::default().references.to_string(),
             output: Layout::default().output.to_string(),
             backlog: false,
@@ -169,7 +171,7 @@ impl App {
 
     fn rows(&self) -> usize {
         match self.step {
-            Step::Paths => 3,
+            Step::Paths => 4,
             Step::Agents => 4,
             Step::Skills => SK_FIXED_ROWS + self.catalog.len(),
             _ => 0,
@@ -192,7 +194,7 @@ impl App {
 
     fn focus_is_input(&self) -> bool {
         match self.step {
-            Step::Paths => self.focus <= 1,
+            Step::Paths => self.focus <= 2,
             Step::Skills => matches!(self.focus, SK_LOCATION | SK_TYPE | SK_REF | SK_NAME),
             _ => false,
         }
@@ -202,6 +204,7 @@ impl App {
         match (self.step, self.focus) {
             (Step::Paths, 0) => Some(&mut self.references),
             (Step::Paths, 1) => Some(&mut self.output),
+            (Step::Paths, 2) => Some(&mut self.instructions),
             (Step::Skills, SK_LOCATION) if self.wiki => Some(&mut self.token_env),
             (Step::Skills, SK_LOCATION) if self.local_locked.is_none() => Some(&mut self.local_dir),
             (Step::Skills, SK_TYPE) if self.wiki => Some(&mut self.page_type),
@@ -213,7 +216,7 @@ impl App {
 
     fn toggle(&mut self) {
         match (self.step, self.focus) {
-            (Step::Paths, 2) => self.backlog = !self.backlog,
+            (Step::Paths, 3) => self.backlog = !self.backlog,
             (Step::Agents, row) => {
                 let a = &mut self.agents[row / 2];
                 if row % 2 == 0 {
@@ -301,7 +304,12 @@ impl App {
             .root
             .resolve(&self.output)
             .map_err(|e| format!("산출물 경로: {e}"))?;
+        let instructions = self
+            .root
+            .resolve(&self.instructions)
+            .map_err(|e| format!("지시서 경로: {e}"))?;
         let layout = Layout {
+            instructions,
             references,
             output,
             backlog_enabled: self.backlog,
@@ -464,6 +472,7 @@ impl App {
     fn config(&self) -> Result<HarnessConfig, String> {
         let layout = self.layout()?;
         let mut config = HarnessConfig::default();
+        config.paths.instructions = layout.instructions;
         config.paths.references = layout.references;
         config.paths.output = layout.output;
         config.backlog.enabled = self.backlog;
@@ -739,12 +748,16 @@ impl App {
                     input(&self.output, self.focus == 1)
                 ),
             ),
-            self.row(2, format!("백로그 agent.db: {}", check(self.backlog))),
+            self.row(
+                2,
+                format!(
+                    "지시서 경로:   {}  (.completed/·completed.log 포함)",
+                    input(&self.instructions, self.focus == 2)
+                ),
+            ),
+            self.row(3, format!("백로그 agent.db: {}", check(self.backlog))),
             Line::raw(""),
             Line::raw("고정 경로 (1단계에서 변경 불가):"),
-            Line::raw(format!("  {}/  진행 중 지시서", Layout::instructions())),
-            Line::raw(format!("  {}/  완료 지시서", Layout::completed())),
-            Line::raw(format!("  {}  완료 로그", Layout::completed_log())),
             Line::raw(format!("  {}/  스킬 원본", Layout::skills())),
             Line::raw(format!(
                 "  {}  백로그 경로 (사용 여부만 선택)",
@@ -1106,6 +1119,46 @@ mod tests {
         typed(&mut app, ".산출물");
         key(&mut app, KeyCode::Enter);
         assert_eq!(app.step, Step::Agents);
+    }
+
+    #[test]
+    fn custom_instructions_dir_is_validated_and_applied() {
+        let p = TempProject::new();
+        let mut app = p.app();
+        key(&mut app, KeyCode::Enter);
+        key(&mut app, KeyCode::Down);
+        key(&mut app, KeyCode::Down);
+        let clear = |app: &mut App| {
+            for _ in 0..app.instructions.chars().count() {
+                key(app, KeyCode::Backspace);
+            }
+        };
+        // Nested inside the references directory: rejected.
+        clear(&mut app);
+        typed(&mut app, "references/tasks");
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.step, Step::Paths);
+        assert!(app.message.as_deref().unwrap().contains("nested"));
+        // Outside the project root: rejected.
+        clear(&mut app);
+        typed(&mut app, "../tasks");
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.step, Step::Paths);
+        assert!(app.message.as_deref().unwrap().contains("지시서 경로"));
+
+        clear(&mut app);
+        typed(&mut app, "docs/tasks");
+        for _ in 0..4 {
+            key(&mut app, KeyCode::Enter);
+        }
+        assert_eq!(app.step, Step::Done);
+        assert!(p.0.join("docs/tasks/.completed").is_dir());
+        assert!(p.0.join("docs/tasks/completed.log").is_file());
+        assert!(!p.0.join("instructions").exists());
+        let config = fs::read_to_string(p.0.join("harness.toml")).unwrap();
+        assert!(config.contains(r#"instructions = "docs/tasks""#));
+        let guide = fs::read_to_string(p.0.join("CLAUDE.md")).unwrap();
+        assert!(guide.contains("`docs/tasks/completed.log`"));
     }
 
     #[test]

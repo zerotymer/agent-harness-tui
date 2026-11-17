@@ -46,9 +46,10 @@ pub fn plan_items(
     root: &ProjectRoot,
     config: &HarnessConfig,
 ) -> io::Result<(Vec<RelPath>, Vec<Desired>)> {
-    let dirs = vec![Layout::instructions(), Layout::completed()];
+    let layout = config.layout();
+    let dirs = vec![layout.instructions.clone(), layout.completed()];
     // Never truncates an existing log and records no init event.
-    let mut desired = vec![Desired::create_only(Layout::completed_log(), "")];
+    let mut desired = vec![Desired::create_only(layout.completed_log(), "")];
     let mut seen = Vec::new();
     for agent in config.agents.iter().map(|a| a.id) {
         if seen.contains(&agent) {
@@ -75,9 +76,10 @@ pub fn render(config: &HarnessConfig, agent: AgentId, lang: Lang) -> String {
     let pick = |e: String, k: String| if en { e } else { k };
     let refs = &config.paths.references;
     let out = &config.paths.output;
-    let inst = Layout::instructions();
-    let done = Layout::completed();
-    let log = Layout::completed_log();
+    let layout = config.layout();
+    let inst = &layout.instructions;
+    let done = layout.completed();
+    let log = layout.completed_log();
     let skills = Layout::skills();
     let db = &config.backlog.path;
 
@@ -95,8 +97,8 @@ pub fn render(config: &HarnessConfig, agent: AgentId, lang: Lang) -> String {
     push("### Paths".into(), "### 경로".into());
     push(String::new(), String::new());
     push(
-        format!("- `{inst}/`: active work instructions (fixed)."),
-        format!("- `{inst}/`: 진행 중인 작업 지시서 (고정)."),
+        format!("- `{inst}/`: active work instructions."),
+        format!("- `{inst}/`: 진행 중인 작업 지시서."),
     );
     push(
         format!("- `{done}/<UUID>.md`: completed instructions."),

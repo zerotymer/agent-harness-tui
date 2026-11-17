@@ -150,6 +150,9 @@ pub enum SourceKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PathsConfig {
+    /// Absent in configs written before it became configurable.
+    #[serde(default = "default_instructions")]
+    pub instructions: RelPath,
     pub references: RelPath,
     pub output: RelPath,
 }
@@ -212,6 +215,7 @@ pub struct HarnessConfig {
 impl HarnessConfig {
     pub fn layout(&self) -> crate::paths::Layout {
         crate::paths::Layout {
+            instructions: self.paths.instructions.clone(),
             references: self.paths.references.clone(),
             output: self.paths.output.clone(),
             backlog_enabled: self.backlog.enabled,
@@ -225,6 +229,7 @@ impl Default for HarnessConfig {
         Self {
             schema_version: SCHEMA_VERSION,
             paths: PathsConfig {
+                instructions: layout.instructions,
                 references: layout.references,
                 output: layout.output,
             },
@@ -237,6 +242,10 @@ impl Default for HarnessConfig {
             skills: Vec::new(),
         }
     }
+}
+
+fn default_instructions() -> RelPath {
+    crate::paths::Layout::default().instructions
 }
 
 impl ContractFile for HarnessConfig {
@@ -697,6 +706,19 @@ ref = "local-one"
         assert_eq!(again, c);
         let d = HarnessConfig::default();
         assert_eq!(HarnessConfig::from_text(&d.to_text().unwrap()).unwrap(), d);
+    }
+
+    #[test]
+    fn instructions_dir_defaults_when_absent() {
+        // CONFIG predates the field.
+        assert!(!CONFIG.contains("instructions"));
+        assert_eq!(config().paths.instructions.as_str(), "instructions");
+        let custom = CONFIG.replace("[paths]", "[paths]\ninstructions = \"docs/tasks\"");
+        let c = HarnessConfig::from_text(&custom).unwrap();
+        assert_eq!(
+            c.layout().completed_log().as_str(),
+            "docs/tasks/completed.log"
+        );
     }
 
     #[test]

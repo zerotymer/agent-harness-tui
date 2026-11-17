@@ -8,11 +8,11 @@ use std::fmt;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-/// Fixed in Stage 1.
-pub const INSTRUCTIONS_DIR: &str = "instructions";
+/// Default instruction root; the user may choose another.
+pub const DEFAULT_INSTRUCTIONS_DIR: &str = "instructions";
 /// Fixed in Stage 1.
 pub const SKILLS_DIR: &str = ".skills";
-/// Enable/disable only in Stage 1.
+/// Backlog file name inside the instruction root.
 pub const BACKLOG_FILE: &str = "agent.db";
 pub const DEFAULT_REFERENCES_DIR: &str = "references";
 pub const DEFAULT_OUTPUT_DIR: &str = ".output";
@@ -273,6 +273,7 @@ pub enum EntryKind {
 /// Stage 1 managed layout. Fixed entries are not configurable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
+    pub instructions: RelPath,
     pub references: RelPath,
     pub output: RelPath,
     pub backlog_enabled: bool,
@@ -281,6 +282,7 @@ pub struct Layout {
 impl Default for Layout {
     fn default() -> Self {
         Self {
+            instructions: RelPath(DEFAULT_INSTRUCTIONS_DIR.into()),
             references: RelPath(DEFAULT_REFERENCES_DIR.into()),
             output: RelPath(DEFAULT_OUTPUT_DIR.into()),
             backlog_enabled: false,
@@ -289,31 +291,26 @@ impl Default for Layout {
 }
 
 impl Layout {
-    pub fn instructions() -> RelPath {
-        RelPath(INSTRUCTIONS_DIR.into())
+    pub fn completed(&self) -> RelPath {
+        self.instructions.join(".completed")
     }
-    pub fn completed() -> RelPath {
-        Self::instructions().join(".completed")
-    }
-    pub fn completed_log() -> RelPath {
-        Self::instructions().join("completed.log")
+    pub fn completed_log(&self) -> RelPath {
+        self.instructions.join("completed.log")
     }
     pub fn skills() -> RelPath {
         RelPath(SKILLS_DIR.into())
     }
-    pub fn backlog() -> RelPath {
-        RelPath(BACKLOG_FILE.into())
+    pub fn backlog(&self) -> RelPath {
+        self.instructions.join(BACKLOG_FILE)
     }
 
     /// Top-level managed entries that must not overlap.
     pub fn entries(&self) -> Vec<(RelPath, EntryKind)> {
         vec![
-            (Self::instructions(), EntryKind::Dir),
+            (self.instructions.clone(), EntryKind::Dir),
             (self.references.clone(), EntryKind::Dir),
             (self.output.clone(), EntryKind::Dir),
             (Self::skills(), EntryKind::Dir),
-            // Reserved even when disabled, so it is always checked.
-            (Self::backlog(), EntryKind::File),
         ]
     }
 
@@ -342,7 +339,9 @@ impl Layout {
                 }
             }
         }
-        for (rel, kind) in &entries {
+        // Inside the instruction root; reserved even when disabled.
+        let backlog = [(self.backlog(), EntryKind::File)];
+        for (rel, kind) in entries.iter().chain(&backlog) {
             if let Some(e) = collision(root, rel, *kind) {
                 errors.push(e);
             }
@@ -443,7 +442,7 @@ mod tests {
         Layout {
             references: RelPath(references.into()),
             output: RelPath(output.into()),
-            backlog_enabled: false,
+            ..Layout::default()
         }
     }
 
@@ -577,13 +576,16 @@ mod tests {
     fn default_layout_is_valid_and_derives_fixed_paths() {
         let root = TempProject::new().root();
         assert_eq!(Layout::default().validate(&root), Ok(()));
-        assert_eq!(Layout::completed().as_str(), "instructions/.completed");
         assert_eq!(
-            Layout::completed_log().as_str(),
+            Layout::default().completed().as_str(),
+            "instructions/.completed"
+        );
+        assert_eq!(
+            Layout::default().completed_log().as_str(),
             "instructions/completed.log"
         );
         assert_eq!(
-            root.abs(&Layout::completed_log()),
+            root.abs(&Layout::default().completed_log()),
             root.path().join("instructions").join("completed.log")
         );
     }
@@ -628,12 +630,12 @@ mod tests {
     fn rejects_collisions_with_existing_files() {
         let p = TempProject::new();
         fs::write(p.0.join("references"), "file, not dir").unwrap();
-        fs::create_dir(p.0.join("agent.db")).unwrap();
+        fs::create_dir_all(p.0.join("instructions/agent.db")).unwrap();
         fs::write(p.0.join("parent"), "").unwrap();
         let root = p.root();
         let errs = Layout::default().validate(&root).unwrap_err();
         assert!(errs.contains(&PathError::Collision("references".into())));
-        assert!(errs.contains(&PathError::Collision("agent.db".into())));
+        assert!(errs.contains(&PathError::Collision("instructions/agent.db".into())));
         let errs = layout("parent/child", ".output")
             .validate(&root)
             .unwrap_err();

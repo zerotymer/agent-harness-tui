@@ -23,7 +23,7 @@ The spec is the source of truth. When an imported skill conflicts with the spec 
 
 ## Working rules for this repository
 
-- **Stage order:** Stage 1 must pass its acceptance criteria before any Stage 2 work starts. Stage 1 must not include worktree/service management, runtime hook execution, a general updater, or an SQLite schema. It must still store the state that the Stage 2 updater will need.
+- **Stage order:** Stage 1 must pass its acceptance criteria before any Stage 2 work starts. Stage 1 must not include worktree/service management, runtime hook execution, a general updater, or any SQLite schema other than the `agent.db` schema the user supplied (issue #21). It must still store the state that the Stage 2 updater will need.
 - **Languages:**
   - Work instructions are written in Korean only.
   - Agent-facing documents (references, skills, guidance such as this file) are an English `{name}.md` plus an equivalent Korean `{name}_ko.md`, and both are edited together.

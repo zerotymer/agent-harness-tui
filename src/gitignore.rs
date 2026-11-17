@@ -53,10 +53,11 @@ pub fn desired(
 
 /// Paths the harness expects Git to track.
 pub fn shared_paths(config: &HarnessConfig) -> Vec<RelPath> {
+    let layout = config.layout();
     let mut v = vec![
-        Layout::instructions(),
-        Layout::completed(),
-        Layout::completed_log(),
+        layout.completed(),
+        layout.completed_log(),
+        layout.instructions,
         config.paths.references.clone(),
         Layout::skills(),
         RelPath::parse(CONFIG_FILE).expect("valid"),
@@ -154,7 +155,7 @@ fn report_with(
         );
     }
 
-    for dir in [Layout::completed(), config.paths.references.clone()] {
+    for dir in [config.layout().completed(), config.paths.references.clone()] {
         if !has_file(&root.abs(&dir)) {
             r.notes.push(format!(
                 "`{dir}/` has no files; Git does not share empty directories"
@@ -244,7 +245,7 @@ mod tests {
         c.paths.output = RelPath::parse("build/.out").unwrap();
         assert_eq!(
             ignore_body(&c, &copies()),
-            "/build/.out/\n/.harness/\n/agent.db\n/agent.db-wal\n/agent.db-shm\n/agent.db-journal\n/.claude/skills/review/\n"
+            "/build/.out/\n/.harness/\n/instructions/agent.db\n/instructions/agent.db-wal\n/instructions/agent.db-shm\n/instructions/agent.db-journal\n/.claude/skills/review/\n"
         );
     }
 
@@ -301,7 +302,9 @@ mod tests {
         for (path, ignored) in [
             (".output/x", true),
             (".harness/state.json", true),
-            ("agent.db-wal", true),
+            ("instructions/agent.db-wal", true),
+            ("instructions/agent-db.sh", false),
+            ("instructions/agent-db.ps1", false),
             (".claude/skills/review/SKILL.md", true),
             (".claude/skills/other/SKILL.md", false),
             ("docs/agent.db", false),

@@ -4,7 +4,7 @@
 
 Create a standalone Rust TUI for initial project harness configuration. Run it from the target project root. Use Ratatui and Crossterm, with Linux servers as the primary environment and native Windows and macOS support.
 
-Implement this instruction in this repository. Preserve existing user files. Do not add worktree management, Worktrunk, Docktree, runtime modes, executable hooks, service management, or a general harness updater in this stage. Store the state needed by the Stage 2 updater now.
+Implement this instruction in this repository. Preserve existing user files. Do not add worktree management, Worktrunk, Docktree, runtime modes, executable hooks, service management, or a general harness updater in this stage. Store the state needed by the Stage 3 updater now.
 
 ## 1. Project-root and path contract
 
@@ -36,7 +36,7 @@ Generate project guidance describing these rules; the initializer itself is not 
 - On explicit task completion, set the status to `DONE` and move the file to `instructions/.completed/<UUID>.md`. Do not infer completion from an agent response or session ending.
 - Append one line per completed instruction to `instructions/completed.log` in recording order, using the format `UUID | summary | timestamp with offset`.
 - Instruction UUIDs must remain unique across independent working copies. Log line order and `NNNN` sequences are local; they are not a globally unique or chronological order across Git branches.
-- A writer must lock the log, avoid overwriting old records, and expose merge conflicts rather than silently discard or renumber history. Cross-worktree reconciliation belongs to Stage 2.
+- A writer must lock the log, avoid overwriting old records, and expose merge conflicts rather than silently discard or renumber history. Cross-worktree reconciliation belongs to Stage 3.
 - The initializer may create a missing empty log, but must not truncate an existing log or record initialization as a task event.
 - `agent.db` is optional and lives in the instruction root. Store the choice and reserve its project-relative path. When enabled, create it with the schema the user supplied (GitHub issue #21): a `backlog` table for work the agent should do and an `instructions` table for instruction status, both with `status` (default `created`), creation/update timestamps and `created_by`/`updated_by`, plus status indexes and WAL mode. Next to it, create `agent-db.sh` (bash) and `agent-db.ps1` (PowerShell) management scripts that call the user's `sqlite3` CLI. The database and scripts are create-only: never migrate or modify an existing database, and never overwrite edited scripts.
 - `completed.log` stays the source of truth for completed instructions. The scripts sync the database from it and only append to it. They record the author from `AGENT_DB_ACTOR` (default `agent`).
@@ -106,7 +106,7 @@ Inspect nested or parent ignore effects when Git is available. If a supposedly s
 
 Support keyboard-only use over SSH, terminal resize, Korean display/input, cancellation, and terminal restoration after failure. Do not fetch on every redraw. If no interactive terminal is available, fail clearly rather than hang.
 
-If initialized state exists, show its summary and permit inspection or a no-op verification. Do not expose Stage 2 mutations through an implicit re-initialization path. Repeating the same initialization must not duplicate blocks, skills or ignore entries.
+If initialized state exists, show its summary and permit inspection or a no-op verification. Do not expose Stage 2/3 mutations through an implicit re-initialization path. Repeating the same initialization must not duplicate blocks, skills or ignore entries.
 
 ## 8. Acceptance criteria
 
@@ -120,4 +120,4 @@ If initialized state exists, show its summary and permit inspection or a no-op v
 
 ## Deliverables
 
-Application source, versioned configuration/state contracts, relevant tests, and English/Korean setup and usage documentation. Report verification results and unresolved integration prerequisites. Preserve the state contract for [Step 2](STEP_2_ADDITIONAL_FEATURES.md).
+Application source, versioned configuration/state contracts, relevant tests, and English/Korean setup and usage documentation. Report verification results and unresolved integration prerequisites. Preserve the state contract for [Step 3](STEP_3_ADDITIONAL_FEATURES.md).

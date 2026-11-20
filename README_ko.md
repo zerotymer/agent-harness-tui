@@ -12,9 +12,10 @@
 | --- | --- | --- | --- |
 | 1 | [STEP_1_INITIAL_CREATION.md](references/STEP_1_INITIAL_CREATION.md) | [STEP_1_INITIAL_CREATION_ko.md](references/STEP_1_INITIAL_CREATION_ko.md) | 독립 실행형 TUI, 최초 생성, 외부 스킬, 설정 및 기준 상태 저장 |
 | 1 | [docs/USAGE.md](docs/USAGE.md), [docs/STAGE1_REPORT.md](docs/STAGE1_REPORT.md) | [docs/USAGE_ko.md](docs/USAGE_ko.md), [docs/STAGE1_REPORT_ko.md](docs/STAGE1_REPORT_ko.md) | 설치·사용, 검증 보고 |
-| 2 | [STEP_2_ADDITIONAL_FEATURES.md](references/STEP_2_ADDITIONAL_FEATURES.md) | [STEP_2_ADDITIONAL_FEATURES_ko.md](references/STEP_2_ADDITIONAL_FEATURES_ko.md) | 제한된 업데이트, override, 모드, 훅, Git worktree, Worktrunk·Docktree |
+| 2 | [STEP_2_CATALOG_INTEGRATION.md](references/STEP_2_CATALOG_INTEGRATION.md), [HARNESS_CATALOG_CONTRACT.md](references/HARNESS_CATALOG_CONTRACT.md) | [STEP_2_CATALOG_INTEGRATION_ko.md](references/STEP_2_CATALOG_INTEGRATION_ko.md), [HARNESS_CATALOG_CONTRACT_ko.md](references/HARNESS_CATALOG_CONTRACT_ko.md) | Wiki.js 페이지·공개 스킬·문서의 로컬 JSON 카탈로그 |
+| 3 | [STEP_3_ADDITIONAL_FEATURES.md](references/STEP_3_ADDITIONAL_FEATURES.md) | [STEP_3_ADDITIONAL_FEATURES_ko.md](references/STEP_3_ADDITIONAL_FEATURES_ko.md) | 제한된 업데이트, override, 모드, 훅, Git worktree, Worktrunk·Docktree |
 
-1단계 구현·검증을 완료한 뒤 2단계를 시작한다. Worktrunk는 Git worktree 관리 도구이므로 2단계에 포함하며, 최초 하네스 생성의 필수 조건으로 삼지 않는다.
+각 단계의 구현·검증을 완료한 뒤 다음 단계를 시작한다. Worktrunk는 Git worktree 관리 도구이므로 3단계에 포함하며, 최초 하네스 생성의 필수 조건으로 삼지 않는다.
 
 ## 결정 사항
 

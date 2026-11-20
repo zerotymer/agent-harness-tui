@@ -60,8 +60,10 @@ Use the following initial file contract, with explicit schema versions:
 ## 4. External skills and references
 
 - Provide a source adapter boundary for listing, searching, previewing, and fetching skill documents and bundled files.
-- The primary source is the `md.zerotymer.net` Wiki.js, read only through its read-only gateway `https://md-gw.zerotymer.net`. The verified contract is the one in the `wiki-skill-import` skill (`.skills/wiki-skill-import/`):
-  - `GET /pages/by-uuid?uuid=<uuid>[&type=<type>]` with `Authorization: Bearer <GATEWAY_TOKEN>`. Pass `type` only when the user gives a path prefix such as `skill`.
+- The primary source is the `md.zerotymer.net` Wiki.js, read only through its read-only gateway `https://md-gw.zerotymer.net`. The verified contract is gateway API v2 (`wikijs-agent-gateway` 2.0.0, checked 2026-11-20 against `/api/v2/openapi.json`):
+  - `GET /api/v2/documents/<uuid>[?type=<type>]`. The UUID is case-insensitive. `type` is the Wiki.js path prefix, which may have several segments (`skill`, `claude/hook`); pass it only when the user gives one.
+  - The token is optional. Reads currently need no authentication. When the configured environment variable holds a token, send `Authorization: Bearer <token>`; on 401/403, tell the user a token is required.
+  - A missing page is a 404 problem document of type `page-not-found`. Report any other 404 as a gateway API mismatch, not as a missing page.
   - The response holds `pages.en` and `pages.ko`, each with `content` (Markdown) and `contentHash`; a missing locale is `null`, and both missing means `PAGE_NOT_FOUND`.
   - Store `pages.en.content` as `SKILL.md` and `pages.ko.content` as `SKILL_ko.md`, unchanged. How to use frontmatter (for example, to derive the skill name or strip Wiki.js page frontmatter) is decided later. Import one locale only if the user accepts a partial import. Never write an empty file.
   - Never call the Wiki.js GraphQL API or scrape `md.zerotymer.net` HTML. That site is a human-facing reference only.

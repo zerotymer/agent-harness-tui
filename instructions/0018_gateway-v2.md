@@ -1,8 +1,8 @@
 # 0018 — 위키 게이트웨이 v2 대응 (1단계 버그 수정)
 
 > Entity UUID: 01a1f80c-e91d-7389-8857-2a2178453de7   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입, 예: `fix/gateway-v2/01a1f80c`)
+> Status: IN_PROGRESS
+> Branch: `fix/gateway-v2/01a1f80c`
 > 근거: 사용자 확인 (2026-11-20) "wikijs가 2.0으로 업데이트", "토큰 입력하되 없어도 진행"
 
 ## 목표

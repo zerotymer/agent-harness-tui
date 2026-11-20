@@ -60,8 +60,10 @@
 ## 4. 외부 스킬 및 참조 문서
 
 - 스킬 문서·동봉 파일의 목록 조회, 검색, 미리보기, 가져오기를 담당하는 소스 연결 경계를 둔다.
-- 주 연계 대상은 `md.zerotymer.net` Wiki.js이며, 읽기 전용 게이트웨이 `https://md-gw.zerotymer.net`을 통해서만 읽는다. 검증된 규약은 `wiki-skill-import` 스킬(`.skills/wiki-skill-import/`)의 내용이다.
-  - `GET /pages/by-uuid?uuid=<uuid>[&type=<type>]`, `Authorization: Bearer <GATEWAY_TOKEN>`. `type`은 사용자가 `skill` 같은 경로 접두어를 줄 때만 전달한다.
+- 주 연계 대상은 `md.zerotymer.net` Wiki.js이며, 읽기 전용 게이트웨이 `https://md-gw.zerotymer.net`을 통해서만 읽는다. 검증된 규약은 게이트웨이 API v2(`wikijs-agent-gateway` 2.0.0, 2026-11-20 `/api/v2/openapi.json`으로 확인)다.
+  - `GET /api/v2/documents/<uuid>[?type=<type>]`. UUID는 대소문자를 구분하지 않는다. `type`은 Wiki.js 경로 접두어이며 여러 단계일 수 있다(`skill`, `claude/hook`). 사용자가 줄 때만 전달한다.
+  - 토큰은 선택 사항이다. 지금은 읽기에 인증이 필요 없다. 설정한 환경변수에 토큰이 있으면 `Authorization: Bearer <token>`을 보내고, 401/403이면 토큰이 필요하다고 안내한다.
+  - 없는 페이지는 `page-not-found` 유형의 404 problem 문서로 온다. 그 밖의 404는 페이지 없음이 아니라 게이트웨이 API 불일치로 보고한다.
   - 응답의 `pages.en`, `pages.ko`에는 각각 `content`(Markdown)와 `contentHash`가 있다. 없는 언어는 `null`이며, 두 언어가 모두 없으면 `PAGE_NOT_FOUND`다.
   - `pages.en.content`는 `SKILL.md`, `pages.ko.content`는 `SKILL_ko.md`로 내용 변경 없이 저장한다. 프런트매터 활용 방식(스킬 이름 추출, Wiki.js 페이지 프런트매터 제거 등)은 추후 정한다. 한 언어만 있으면 사용자가 부분 가져오기를 수락한 경우에만 가져온다. 빈 파일을 쓰지 않는다.
   - Wiki.js GraphQL API를 직접 호출하거나 `md.zerotymer.net` HTML을 수집하지 않는다. 그 사이트는 사람이 확인하는 용도로만 쓴다.

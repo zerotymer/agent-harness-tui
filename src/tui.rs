@@ -802,7 +802,7 @@ impl App {
         };
         let location = if self.wiki {
             format!(
-                "토큰 환경변수 이름: {}",
+                "토큰 환경변수 이름(선택): {}",
                 input(&self.token_env, f == SK_LOCATION)
             )
         } else if let Some(rel) = &self.local_locked {

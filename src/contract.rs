@@ -326,8 +326,11 @@ impl ContractFile for HarnessConfig {
                     if !is_uuid(&k.reference) {
                         p.push(format!("skill `{}`: ref must be a page UUID", k.id));
                     }
-                    if k.page_type.as_deref().is_some_and(|t| !is_slug(t)) {
-                        p.push(format!("skill `{}`: type must be a slug", k.id));
+                    if k.page_type.as_deref().is_some_and(|t| !is_page_type(t)) {
+                        p.push(format!(
+                            "skill `{}`: type must be slugs joined by `/`",
+                            k.id
+                        ));
                     }
                 }
                 SourceKind::LocalDir => {
@@ -612,6 +615,11 @@ pub fn is_slug(s: &str) -> bool {
         && !s.starts_with(['.', '-'])
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
+/// A wiki path type such as `skill` or `claude/hook`: slugs joined by `/`.
+pub fn is_page_type(s: &str) -> bool {
+    s.split('/').all(is_slug)
 }
 
 /// `[A-Z_][A-Z0-9_]*`.
@@ -924,5 +932,23 @@ ref = "local-one"
         assert!(is_env_name("GATEWAY_TOKEN") && !is_env_name("gateway") && !is_env_name("1X"));
         assert!(is_slug("wiki-skill-import") && !is_slug(".hidden") && !is_slug("a/b"));
         assert!(is_sha256(HASH) && !is_sha256(&HASH.to_uppercase()));
+    }
+
+    #[test]
+    fn page_type_allows_slug_segments() {
+        for ok in ["skill", "claude/hook", "a.b/c_d-e"] {
+            assert!(is_page_type(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "/skill",
+            "skill/",
+            "claude//hook",
+            "../x",
+            "a b",
+            "-x/y",
+        ] {
+            assert!(!is_page_type(bad), "{bad}");
+        }
     }
 }

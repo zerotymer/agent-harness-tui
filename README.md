@@ -12,9 +12,10 @@ These documents are the implementation instructions for this repository. The app
 | --- | --- | --- | --- |
 | 1 | [STEP_1_INITIAL_CREATION.md](references/STEP_1_INITIAL_CREATION.md) | [STEP_1_INITIAL_CREATION_ko.md](references/STEP_1_INITIAL_CREATION_ko.md) | Standalone TUI, initial generation, remote skills, configuration and baseline state |
 | 1 | [docs/USAGE.md](docs/USAGE.md), [docs/STAGE1_REPORT.md](docs/STAGE1_REPORT.md) | [docs/USAGE_ko.md](docs/USAGE_ko.md), [docs/STAGE1_REPORT_ko.md](docs/STAGE1_REPORT_ko.md) | Install and usage; verification report |
-| 2 | [STEP_2_ADDITIONAL_FEATURES.md](references/STEP_2_ADDITIONAL_FEATURES.md) | [STEP_2_ADDITIONAL_FEATURES_ko.md](references/STEP_2_ADDITIONAL_FEATURES_ko.md) | Bounded updates, overrides, modes, hooks, Git worktree, Worktrunk and Docktree |
+| 2 | [STEP_2_CATALOG_INTEGRATION.md](references/STEP_2_CATALOG_INTEGRATION.md), [HARNESS_CATALOG_CONTRACT.md](references/HARNESS_CATALOG_CONTRACT.md) | [STEP_2_CATALOG_INTEGRATION_ko.md](references/STEP_2_CATALOG_INTEGRATION_ko.md), [HARNESS_CATALOG_CONTRACT_ko.md](references/HARNESS_CATALOG_CONTRACT_ko.md) | Local JSON catalogs for Wiki.js pages, public skills and documents |
+| 3 | [STEP_3_ADDITIONAL_FEATURES.md](references/STEP_3_ADDITIONAL_FEATURES.md) | [STEP_3_ADDITIONAL_FEATURES_ko.md](references/STEP_3_ADDITIONAL_FEATURES_ko.md) | Bounded updates, overrides, modes, hooks, Git worktree, Worktrunk and Docktree |
 
-Complete and validate Stage 1 before starting Stage 2. Worktrunk belongs to Stage 2 because it manages Git worktrees; it is not a prerequisite for initial harness creation.
+Complete and validate each stage before starting the next. Worktrunk belongs to Stage 3 because it manages Git worktrees; it is not a prerequisite for initial harness creation.
 
 ## Decisions
 

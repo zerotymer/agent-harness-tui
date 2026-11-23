@@ -2,8 +2,8 @@
 //!
 //! Two sources share one boundary: a local directory, and the read-only
 //! `md.zerotymer.net` wiki gateway (gateway API v2,
-//! `GET /api/v2/documents/{uuid}`). The gateway has no documented catalog API yet, so
-//! its list/search is a labeled dummy that never touches the network.
+//! `GET /api/v2/documents/{uuid}`). Wiki pages are listed from the local wiki
+//! catalog (`catalog.rs`), never from the network.
 //! Fetching happens only on an explicit request; nothing is cached. Imported
 //! content is stored verbatim (frontmatter is not interpreted) and bundled
 //! files are copied, never executed.
@@ -12,6 +12,7 @@ use crate::apply::{Desired, sha256};
 use crate::contract::{
     HarnessLock, LockedFile, LockedSkill, WIKI_GATEWAY_URL, is_page_type, is_slug, is_uuid,
 };
+use crate::local::Secret;
 use crate::paths::{Layout, ProjectRoot, RelPath};
 use serde::Deserialize;
 use std::fmt;
@@ -27,8 +28,10 @@ pub struct CatalogEntry {
     pub reference: String,
     pub title: String,
     pub page_type: Option<String>,
-    /// Placeholder entry, not fetched from a real catalog.
-    pub dummy: bool,
+    /// Suggested skill name (`.skills/<name>/`).
+    pub name: Option<String>,
+    /// Why the entry cannot be imported, if it cannot.
+    pub blocked: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,19 +110,8 @@ impl fmt::Display for SourceError {
 
 impl std::error::Error for SourceError {}
 
-/// Source boundary: list, search, and fetch (fetch doubles as preview).
+/// Source boundary: fetch (fetch doubles as preview).
 pub trait SkillSource {
-    fn list(&self) -> Result<Vec<CatalogEntry>, SourceError>;
-
-    fn search(&self, query: &str) -> Result<Vec<CatalogEntry>, SourceError> {
-        let q = query.to_lowercase();
-        Ok(self
-            .list()?
-            .into_iter()
-            .filter(|e| e.title.to_lowercase().contains(&q) || e.reference.contains(&q))
-            .collect())
-    }
-
     fn fetch(&self, reference: &str, page_type: Option<&str>) -> Result<Package, SourceError>;
 }
 
@@ -133,8 +125,8 @@ pub struct LocalDir {
     pub dir: PathBuf,
 }
 
-impl SkillSource for LocalDir {
-    fn list(&self) -> Result<Vec<CatalogEntry>, SourceError> {
+impl LocalDir {
+    pub fn list(&self) -> Result<Vec<CatalogEntry>, SourceError> {
         let mut entries = Vec::new();
         for entry in fs::read_dir(&self.dir).map_err(io_err(&self.dir))? {
             let entry = entry.map_err(io_err(&self.dir))?;
@@ -144,14 +136,17 @@ impl SkillSource for LocalDir {
                     reference: name.clone(),
                     title: name,
                     page_type: None,
-                    dummy: false,
+                    name: None,
+                    blocked: None,
                 });
             }
         }
         entries.sort_by(|a, b| a.reference.cmp(&b.reference));
         Ok(entries)
     }
+}
 
+impl SkillSource for LocalDir {
     fn fetch(&self, reference: &str, _page_type: Option<&str>) -> Result<Package, SourceError> {
         let rel = RelPath::parse(reference)
             .map_err(|_| SourceError::InvalidReference(reference.into()))?;
@@ -249,8 +244,10 @@ fn walk(
 pub struct WikiGateway {
     pub base_url: String,
     /// Name of the environment variable holding the optional token. The
-    /// token itself is read per request and never stored.
+    /// variable is read per request and wins over `stored_token`.
     pub token_env: String,
+    /// Token from `.harness/local.toml` or typed in the TUI.
+    pub stored_token: Option<Secret>,
     pub timeout: Duration,
 }
 
@@ -259,6 +256,7 @@ impl WikiGateway {
         Self {
             base_url: WIKI_GATEWAY_URL.into(),
             token_env: token_env.into(),
+            stored_token: None,
             timeout: GATEWAY_TIMEOUT,
         }
     }
@@ -318,43 +316,13 @@ impl WikiGateway {
     }
 }
 
-/// Real wiki skills used as sample entries until a catalog API exists.
-const DUMMY_CATALOG: &[(&str, &str)] = &[
-    ("14cea96f-f1e2-461e-b9a7-96b5a6f63b67", "wiki-skill-import"),
-    (
-        "e03f48fb-3e00-41d7-b99d-c32854567d67",
-        "git-branch-guideline",
-    ),
-    (
-        "5c502e34-1daf-44d7-b740-1baa03e583e5",
-        "git-worktree-guideline",
-    ),
-    ("b3230cd0-6081-4570-9bda-183543f585e9", "project-session"),
-    (
-        "366d5d35-7b46-4d5c-b5dd-3e53d48d7492",
-        "instruction-operating-rules",
-    ),
-];
-
 impl SkillSource for WikiGateway {
-    /// Dummy: fixed entries, no network (no documented catalog contract).
-    fn list(&self) -> Result<Vec<CatalogEntry>, SourceError> {
-        Ok(DUMMY_CATALOG
-            .iter()
-            .map(|(uuid, title)| CatalogEntry {
-                reference: (*uuid).into(),
-                title: (*title).into(),
-                page_type: Some("skill".into()),
-                dummy: true,
-            })
-            .collect())
-    }
-
     fn fetch(&self, uuid: &str, page_type: Option<&str>) -> Result<Package, SourceError> {
-        let token = std::env::var(&self.token_env)
+        let env = std::env::var(&self.token_env)
             .ok()
-            .filter(|t| !t.is_empty());
-        self.fetch_with(token.as_deref(), uuid, page_type)
+            .and_then(|t| Secret::new(&t));
+        let token = env.or_else(|| self.stored_token.clone());
+        self.fetch_with(token.as_ref().map(Secret::expose), uuid, page_type)
     }
 }
 
@@ -617,6 +585,7 @@ mod tests {
         WikiGateway {
             base_url: url.into(),
             token_env: "AHT_TEST_UNSET_TOKEN_VAR".into(),
+            stored_token: None,
             timeout: Duration::from_secs(5),
         }
     }
@@ -778,15 +747,32 @@ mod tests {
     }
 
     #[test]
-    fn dummy_catalog_uses_no_network() {
-        // An unroutable base URL proves list/search never connect.
-        let g = gateway("http://127.0.0.1:9");
-        let all = g.list().unwrap();
-        assert_eq!(all.len(), DUMMY_CATALOG.len());
-        assert!(all.iter().all(|e| e.dummy && is_uuid(&e.reference)));
-        let found = g.search("worktree").unwrap();
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].title, "git-worktree-guideline");
+    fn gateway_sends_stored_token_and_never_shows_it() {
+        let (url, req) = serve_once(200, body(Some("x"), None));
+        let mut g = gateway(&url);
+        g.stored_token = Secret::new(TOKEN);
+        g.fetch(UUID, None).unwrap();
+        let req = req.join().unwrap().to_lowercase();
+        assert!(
+            req.contains(&format!("authorization: bearer {TOKEN}")),
+            "{req}"
+        );
+        assert!(!format!("{g:?}").contains(TOKEN), "Debug redacts the token");
+    }
+
+    #[test]
+    fn environment_token_wins_over_stored_token() {
+        const VAR: &str = "AHT_TEST_ENV_TOKEN_PRECEDENCE";
+        // SAFETY: the variable name is unique to this test.
+        unsafe { std::env::set_var(VAR, "env-token-1") };
+        let (url, req) = serve_once(200, body(Some("x"), None));
+        let mut g = gateway(&url);
+        g.token_env = VAR.into();
+        g.stored_token = Secret::new(TOKEN);
+        g.fetch(UUID, None).unwrap();
+        let req = req.join().unwrap().to_lowercase();
+        assert!(req.contains("authorization: bearer env-token-1"), "{req}");
+        assert!(!req.contains(TOKEN));
     }
 
     #[test]

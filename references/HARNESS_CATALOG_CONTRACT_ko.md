@@ -21,7 +21,7 @@
 
 - `schema_version`(정수)을 가장 먼저 읽는다. 1이 아닌 버전은 미지원이다.
 - `kind`는 TUI가 요청한 파일 종류와 같아야 한다.
-- `catalog_version`(문자열)은 배포 책임자가 정하는 자유 형식 표시값이다. TUI가 화면에 보여 준다.
+- `catalog_version`(문자열, 선택)은 배포 책임자가 정하는 자유 형식 표시값이다. 값이 있으면 TUI가 화면에 보여 준다.
 - 모든 단계에서 모르는 키는 거부한다.
 - UTF-8, BOM 없음.
 
@@ -58,18 +58,17 @@
 | 필드 | 타입 | 필수 | 규칙 |
 | --- | --- | --- | --- |
 | `installer` | 문자열 | 예 | `skills-cli`는 TUI가 실행한다. 다른 값은 표시만 한다. |
-| `source` | 문자열 | 예 | 저장소 URL 또는 `owner/repo`. 사용자에게 보여 준다. `skills-cli`에서는 CLI의 source 인자다. |
-| `skill` | 문자열 | `skills-cli`만 | `-s`에 넘기는 스킬 이름. |
-| `ref` | 문자열 | 아니요 | `skills-cli`만. `#<ref>`로 붙이는 브랜치, 태그, 커밋 SHA. |
+| `source` | 문자열 | 예 | 저장소 URL 또는 `owner/repo`. 사용자에게 보여 준다. `skills-cli`에서는 CLI에 그대로 넘긴다. |
+| `skill` | 문자열 | 아니요 | `skills-cli`만. `-s`에 넘기는 스킬 이름으로, 스킬 `SKILL.md` frontmatter의 `name`이다. 생략하거나 `*`이면 source의 모든 스킬을 설치하며 `-s`를 넘기지 않는다. |
 | `install` | 문자열 | 다른 설치 도구만 | 사용자가 실행하도록 보여 주는 명령 문구. TUI는 실행하지 않는다. |
 
-- `source`, `skill`, `ref`는 `-`로 시작할 수 없고 공백·제어 문자를 포함할 수 없다. 셸 없이 각각 별도 인자로 넘긴다.
-- `skills-cli` 항목에는 `install`을 둘 수 없다. 다른 설치 도구 항목에는 `skill`, `ref`를 둘 수 없다.
+- `source`, `skill`은 `-`로 시작할 수 없고 공백·제어 문자를 포함할 수 없다. 셸 없이 각각 별도 인자로 넘긴다.
+- `skills-cli` 항목에는 `install`을 둘 수 없다. 다른 설치 도구 항목에는 `skill`을 둘 수 없다.
+- 설치용 버전 필드는 없다. 버전을 고정하려면 배포 책임자가 skills CLI 문법으로 `source`에 적는다(예: `owner/repo@<커밋 SHA>`, `owner/repo#<태그>`). TUI는 `source`를 해석하지 않고 그대로 넘긴다. `version`은 표시용으로만 쓴다.
 
 ```json
 { "id": "security-audit", "installer": "skills-cli",
-  "source": "https://github.com/cloudflare/security-audit-skill", "skill": "security-audit",
-  "ref": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+  "source": "cloudflare/security-audit-skill@c1c8a8c1471069fb0e188eeaff69b8e8db6564a8", "skill": "security-audit",
   "title": { "en": "security-audit" },
   "summary": { "en": "Multi-phase security audits.", "ko": "다단계 보안 감사 스킬." },
   "version": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8" }

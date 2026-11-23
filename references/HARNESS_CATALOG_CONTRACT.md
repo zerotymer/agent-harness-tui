@@ -21,7 +21,7 @@ Schema version: **1**. Used by [Stage 2](STEP_2_CATALOG_INTEGRATION.md). The dis
 
 - `schema_version` (integer) is read first. Any version other than 1 is unsupported.
 - `kind` must match the file the TUI asked for.
-- `catalog_version` (string) is a free-form label that the distributor chooses. The TUI shows it.
+- `catalog_version` (string, optional) is a free-form label that the distributor chooses. When present, the TUI shows it.
 - Unknown keys are rejected at every level.
 - UTF-8, no BOM.
 
@@ -58,18 +58,17 @@ When `target` is `skill`, `id` must be a slug (`[A-Za-z0-9._-]+`, not starting w
 | Field | Type | Required | Rule |
 | --- | --- | --- | --- |
 | `installer` | string | yes | `skills-cli` is run by the TUI. Any other value is display only. |
-| `source` | string | yes | Repository URL or `owner/repo`. Shown to the user. For `skills-cli` it is the CLI's source argument. |
-| `skill` | string | `skills-cli` only | Skill name passed to `-s`. |
-| `ref` | string | no | `skills-cli` only: branch, tag or commit SHA appended as `#<ref>`. |
+| `source` | string | yes | Repository URL or `owner/repo`. Shown to the user. For `skills-cli` it is passed to the CLI unchanged. |
+| `skill` | string | no | `skills-cli` only. Skill name passed to `-s`, which is the `name` in the skill's `SKILL.md` frontmatter. Omitted or `*` installs every skill in the source, and `-s` is not passed. |
 | `install` | string | other installers only | Command text shown for the user to run. The TUI never runs it. |
 
-- `source`, `skill` and `ref` must not start with `-` and must not contain whitespace or control characters. They are passed as separate arguments without a shell.
-- A `skills-cli` entry must not have `install`; another installer must not have `skill` or `ref`.
+- `source` and `skill` must not start with `-` and must not contain whitespace or control characters. They are passed as separate arguments without a shell.
+- A `skills-cli` entry must not have `install`; another installer must not have `skill`.
+- There is no version field for installs. To pin a version, the distributor writes it into `source` in the skills CLI's own syntax (for example `owner/repo@<commit-sha>` or `owner/repo#<tag>`). The TUI passes `source` as is and does not parse it. `version` stays display only.
 
 ```json
 { "id": "security-audit", "installer": "skills-cli",
-  "source": "https://github.com/cloudflare/security-audit-skill", "skill": "security-audit",
-  "ref": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+  "source": "cloudflare/security-audit-skill@c1c8a8c1471069fb0e188eeaff69b8e8db6564a8", "skill": "security-audit",
   "title": { "en": "security-audit" },
   "summary": { "en": "Multi-phase security audits.", "ko": "다단계 보안 감사 스킬." },
   "version": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8" }

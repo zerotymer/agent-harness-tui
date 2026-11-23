@@ -20,14 +20,16 @@
 
 ### skills (공개 스킬)
 6. 설치는 공식 방법인 `npx skills add`(vercel-labs/skills)로 한다. `npx`만 사용한다.
-7. **사용자가 확인하면 TUI가 실행한다.** 기본 설치 범위는 project이고, 사용자가 user를 고르면 `-g`를 붙인다.
-   - 카탈로그에는 셸 명령 문자열 대신 구조화된 필드를 둔다: `source`, `skill`, `ref`
-   - TUI는 `npx skills add <source>[#ref] -s <skill> -a <agents> -y [-g]`를 인자 배열로 만들어 셸 없이 실행한다. Windows에서는 `npx.cmd`를 쓴다.
-   - 실행 전에 명령 전체를 보여 주고, 실행 후 출력과 종료 코드를 표시한다.
+7. **사용자가 확인하면 TUI가 실행한다.** (2026-11-23 수정: 설치 제어를 skills CLI에 위임)
+   - 카탈로그에는 셸 명령 문자열 대신 구조화된 필드를 둔다: `source`, `skill`(선택). `ref` 필드는 두지 않는다.
+   - TUI는 `npx skills add <source> [-s <skill>]`를 인자 배열로 만들어 셸 없이 실행한다. `-a`, `-g`, `-y`는 붙이지 않는다. Windows에서는 `npx.cmd`를 쓴다. 스크립트 파일은 만들지 않는다.
+   - 확인하면 TUI가 터미널을 CLI에 넘기고, 에이전트·범위·스킬 선택은 CLI가 사용자에게 직접 묻는다. CLI가 끝나면 TUI로 돌아와 종료 코드를 표시한다.
+   - `skill`이 없거나 `*`이면 source의 모든 스킬을 설치한다.
+   - `catalog_version`은 선택 필드다.
    - `npx`가 없으면 사용 불가로 표시한다.
-8. 설치 위치와 링크 처리는 skills CLI에 맡긴다. 하네스는 그 파일들의 소유권을 갖지 않는다. 다만 하네스가 이미 배포한 같은 이름의 스킬이 있으면 충돌로 표시한다.
+8. 설치 위치와 링크 처리는 skills CLI에 맡긴다. 하네스는 그 파일들의 소유권을 갖지 않는다. 다만 하네스가 이미 배포한 같은 이름(`SKILL.md`의 `name`)의 스킬이 있으면 충돌로 표시한다. 이름은 설치 전에 `npx skills add <source> -l`로 확인한다.
 9. skills CLI로 설치하지 않는 항목(`claude plugin` 등)은 `install` 문구를 보여 주기만 한다.
-10. `#ref` 버전 고정이 CLI에서 실제로 동작하는지는 구현 단계에서 실행해 확인한다. 동작하지 않으면 `version`은 정보로만 표시한다.
+10. 버전 고정은 배포 책임자가 skills CLI 문법으로 `source`에 적는다(예: `owner/repo@<커밋 SHA>`). TUI는 `source`를 해석하지 않는다. `version`은 정보로만 표시한다. (2026-11-23 수정)
 
 ### docs
 11. 2단계에서는 목록만 표시한다.

@@ -16,3 +16,4 @@
 01a1e6cf-6ba8-7c9e-ab81-70e95764ab08 | 0016 지시서 경로 사용자 입력(기본 instructions): .completed·completed.log·지침·gitignore 연동, 이전 설정 호환, 명세 영/한 수정 (PR #23) | 2026-11-17 09:22:48 +0900
 01a1e6cf-6baa-7e82-8ce7-3c875bafb0d4 | 0017 agent.db 생성: rusqlite(bundled)로 지시서 루트에 DB, bash·PowerShell 관리 스크립트(create-only), completed.log 기준·추가만, AGENT_DB_ACTOR (#21, PR #23) | 2026-11-17 09:22:48 +0900
 01a1f80c-e91d-7389-8857-2a2178453de7 | 0018 위키 게이트웨이 v2 대응: /api/v2/documents/{uuid} 경로, 선택 토큰(token_env), 다단계 type, 비 problem 404를 API 불일치로 보고, wiki-skill-import 로컬 수정, 세 OS CI 통과 (PR #28, #30) | 2026-11-23 16:01:02 +0900
+01a1f80c-e91d-7346-8e86-a6cc73d252b3 | 0019 2단계 재정의(카탈로그 연동): wiki·skills·docs JSON 규약 v1, skills 설치는 npx skills add 대화형 위임(-l 충돌 검사, ref 없음·source에 고정), catalog_version 선택, 기존 2단계는 3단계로 이관 (PR #29, #30, #31) | 2026-11-23 16:14:49 +0900

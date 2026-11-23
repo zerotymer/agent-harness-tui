@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Stage 1 is implemented and awaiting the user's acceptance (see `docs/STAGE1_REPORT.md`). The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
+Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_REPORT.md`). Stage 2 is being re-scoped to catalog integration (instruction 0019). The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
 
 - Build: `cargo build`
 - Test: `cargo test` (tests build target projects in temporary directories)

@@ -62,8 +62,9 @@ The tool changes existing files only inside managed blocks that start with `agen
 ## Skill sources
 
 - **Local folder.** Use a folder inside the project, for example `vendor/skills`. Each subfolder that contains a `SKILL.md` is a skill. Bundled files are copied but never executed. Symlinks that point outside the package are refused. A folder outside the project can't be saved in shared settings, so copy those skills into the project first.
-- **Wiki gateway (`md.zerotymer.net`).** The tool reads the gateway `https://md-gw.zerotymer.net` with `GET /pages/by-uuid`.
-  - **Token:** enter the *name* of the environment variable that holds your token. The default is `GATEWAY_TOKEN`; use any name your shell already sets. The token value itself is never written to files, screens or logs.
+- **Wiki gateway (`md.zerotymer.net`).** The tool reads the gateway `https://md-gw.zerotymer.net` with `GET /api/v2/documents/<uuid>` (gateway API v2).
+  - **Token (optional):** enter the *name* of the environment variable that may hold your token. The default is `GATEWAY_TOKEN`. If the variable is unset, the tool reads without a token; reads currently need none. If the gateway answers 401/403, set the variable. The token value itself is never written to files, screens or logs.
+  - **Type:** optional Wiki.js path prefix such as `skill` or `claude/hook`.
   - **Fetching:** enter a page UUID and press [조회] (fetch). The network is used only at that moment. The request times out after 15 seconds, and the screen does not update until the response arrives.
   - **Content:** English and Korean pages become `SKILL.md` and `SKILL_ko.md`, unchanged. If one language is missing, you must accept a partial import. The tool never creates a missing translation.
   - **Catalog:** the gateway has no catalog API yet, so [목록 불러오기] (load list) shows fixed sample entries marked "(더미)" (dummy).

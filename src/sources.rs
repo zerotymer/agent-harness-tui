@@ -1,15 +1,17 @@
 //! Skill sources and import (Stage 1 spec §4, instruction 0007).
 //!
 //! Two sources share one boundary: a local directory, and the read-only
-//! `md.zerotymer.net` wiki gateway (`wiki-skill-import` contract,
-//! `GET /pages/by-uuid`). The gateway has no documented catalog API yet, so
+//! `md.zerotymer.net` wiki gateway (gateway API v2,
+//! `GET /api/v2/documents/{uuid}`). The gateway has no documented catalog API yet, so
 //! its list/search is a labeled dummy that never touches the network.
 //! Fetching happens only on an explicit request; nothing is cached. Imported
 //! content is stored verbatim (frontmatter is not interpreted) and bundled
 //! files are copied, never executed.
 
 use crate::apply::{Desired, sha256};
-use crate::contract::{HarnessLock, LockedFile, LockedSkill, WIKI_GATEWAY_URL, is_slug, is_uuid};
+use crate::contract::{
+    HarnessLock, LockedFile, LockedSkill, WIKI_GATEWAY_URL, is_page_type, is_slug, is_uuid,
+};
 use crate::paths::{Layout, ProjectRoot, RelPath};
 use serde::Deserialize;
 use std::fmt;
@@ -52,8 +54,6 @@ pub struct Package {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceError {
     InvalidReference(String),
-    /// The environment variable that should hold the token is unset.
-    MissingToken(String),
     Unreachable {
         url: String,
         uuid: String,
@@ -67,6 +67,9 @@ pub enum SourceError {
     Auth(u16),
     /// `PAGE_NOT_FOUND`: no locale exists for the UUID.
     NotFound(String),
+    /// A 404 that is not the gateway's page-not-found problem: the endpoint
+    /// itself is missing, so the gateway contract has probably changed.
+    ApiMismatch(String),
     Http(u16),
     InvalidResponse(String),
     Io(String),
@@ -79,18 +82,20 @@ impl fmt::Display for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidReference(r) => write!(f, "invalid reference `{r}`"),
-            Self::MissingToken(var) => {
-                write!(
-                    f,
-                    "environment variable `{var}` is not set; the gateway needs a token"
-                )
-            }
             Self::Unreachable { url, uuid, detail } => {
                 write!(f, "gateway {url} unreachable for {uuid}: {detail}")
             }
             Self::Timeout { url, uuid } => write!(f, "gateway {url} timed out for {uuid}"),
-            Self::Auth(code) => write!(f, "gateway refused the token (HTTP {code})"),
+            Self::Auth(code) => write!(
+                f,
+                "gateway refused the request (HTTP {code}); a valid token is required"
+            ),
             Self::NotFound(uuid) => write!(f, "PAGE_NOT_FOUND: {uuid}"),
+            Self::ApiMismatch(url) => write!(
+                f,
+                "gateway API mismatch: {url} has no such endpoint (HTTP 404); \
+                 the gateway contract may have changed"
+            ),
             Self::Http(code) => write!(f, "gateway returned HTTP {code}"),
             Self::InvalidResponse(why) => write!(f, "unexpected gateway response: {why}"),
             Self::Io(why) => write!(f, "{why}"),
@@ -243,8 +248,8 @@ fn walk(
 #[derive(Debug, Clone)]
 pub struct WikiGateway {
     pub base_url: String,
-    /// Name of the environment variable holding the token. The token
-    /// itself is read per request and never stored.
+    /// Name of the environment variable holding the optional token. The
+    /// token itself is read per request and never stored.
     pub token_env: String,
     pub timeout: Duration,
 }
@@ -258,36 +263,48 @@ impl WikiGateway {
         }
     }
 
-    fn fetch_with_token(
+    /// Reads one page. The token is optional: without one the request
+    /// carries no `Authorization` header.
+    fn fetch_with(
         &self,
-        token: &str,
+        token: Option<&str>,
         uuid: &str,
         page_type: Option<&str>,
     ) -> Result<Package, SourceError> {
         if !is_uuid(uuid) {
             return Err(SourceError::InvalidReference(uuid.into()));
         }
-        let mut url = format!("{}/pages/by-uuid?uuid={uuid}", self.base_url);
+        let path = format!("/api/v2/documents/{uuid}");
+        let mut url = format!("{}{path}", self.base_url);
         if let Some(t) = page_type {
-            if !is_slug(t) {
+            if !is_page_type(t) {
                 return Err(SourceError::InvalidReference(t.into()));
             }
-            url.push_str(&format!("&type={t}"));
+            url.push_str(&format!("?type={t}"));
         }
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .timeout_global(Some(self.timeout))
+            .http_status_as_error(false)
             .build()
             .into();
-        let body = agent
-            .get(&url)
-            .header("Authorization", &format!("Bearer {token}"))
-            .call()
-            .and_then(|mut r| r.body_mut().read_to_string());
-        match body {
-            Ok(text) => parse_gateway(&text, uuid),
-            Err(ureq::Error::StatusCode(code @ (401 | 403))) => Err(SourceError::Auth(code)),
-            Err(ureq::Error::StatusCode(404)) => Err(SourceError::NotFound(uuid.into())),
-            Err(ureq::Error::StatusCode(code)) => Err(SourceError::Http(code)),
+        let mut req = agent.get(&url);
+        if let Some(token) = token {
+            req = req.header("Authorization", &format!("Bearer {token}"));
+        }
+        let resp = req.call().and_then(|mut r| {
+            let status = r.status().as_u16();
+            r.body_mut().read_to_string().map(|body| (status, body))
+        });
+        match resp {
+            Ok((200, body)) => parse_gateway(&body, uuid),
+            Ok((code @ (401 | 403), _)) => Err(SourceError::Auth(code)),
+            // v2 reports a missing page as a problem document; any other 404
+            // means the endpoint itself is gone.
+            Ok((404, body)) if body.contains("page-not-found") => {
+                Err(SourceError::NotFound(uuid.into()))
+            }
+            Ok((404, _)) => Err(SourceError::ApiMismatch(format!("{}{path}", self.base_url))),
+            Ok((code, _)) => Err(SourceError::Http(code)),
             Err(ureq::Error::Timeout(_)) => Err(SourceError::Timeout {
                 url: self.base_url.clone(),
                 uuid: uuid.into(),
@@ -336,9 +353,8 @@ impl SkillSource for WikiGateway {
     fn fetch(&self, uuid: &str, page_type: Option<&str>) -> Result<Package, SourceError> {
         let token = std::env::var(&self.token_env)
             .ok()
-            .filter(|t| !t.is_empty())
-            .ok_or_else(|| SourceError::MissingToken(self.token_env.clone()))?;
-        self.fetch_with_token(&token, uuid, page_type)
+            .filter(|t| !t.is_empty());
+        self.fetch_with(token.as_deref(), uuid, page_type)
     }
 }
 
@@ -609,12 +625,10 @@ mod tests {
     fn gateway_request_shape_and_both_locales() {
         let (url, req) = serve_once(200, body(Some("# en\n"), Some("# ko\n")));
         let pkg = gateway(&url)
-            .fetch_with_token(TOKEN, UUID, Some("skill"))
+            .fetch_with(Some(TOKEN), UUID, Some("skill"))
             .unwrap();
         let req = req.join().unwrap();
-        assert!(req.starts_with(&format!(
-            "GET /pages/by-uuid?uuid={UUID}&type=skill HTTP/1.1"
-        )));
+        assert!(req.starts_with(&format!("GET /api/v2/documents/{UUID}?type=skill HTTP/1.1")));
         assert!(
             req.contains(&format!("authorization: Bearer {TOKEN}"))
                 || req.contains(&format!("Authorization: Bearer {TOKEN}"))
@@ -630,11 +644,11 @@ mod tests {
     #[test]
     fn gateway_without_type_omits_parameter() {
         let (url, req) = serve_once(200, body(Some("x"), None));
-        gateway(&url).fetch_with_token(TOKEN, UUID, None).unwrap();
+        gateway(&url).fetch_with(Some(TOKEN), UUID, None).unwrap();
         assert!(
             req.join()
                 .unwrap()
-                .starts_with(&format!("GET /pages/by-uuid?uuid={UUID} "))
+                .starts_with(&format!("GET /api/v2/documents/{UUID} "))
         );
     }
 
@@ -643,12 +657,11 @@ mod tests {
         for (status, expect) in [
             (401, SourceError::Auth(401)),
             (403, SourceError::Auth(403)),
-            (404, SourceError::NotFound(UUID.into())),
             (500, SourceError::Http(500)),
         ] {
             let (url, _req) = serve_once(status, r#"{"error":"x"}"#.into());
             assert_eq!(
-                gateway(&url).fetch_with_token(TOKEN, UUID, None),
+                gateway(&url).fetch_with(Some(TOKEN), UUID, None),
                 Err(expect)
             );
         }
@@ -666,14 +679,14 @@ mod tests {
         let mut g = gateway(&url);
         g.timeout = Duration::from_millis(200);
         assert!(matches!(
-            g.fetch_with_token(TOKEN, UUID, None),
+            g.fetch_with(Some(TOKEN), UUID, None),
             Err(SourceError::Timeout { .. })
         ));
         hold.join().unwrap();
 
         // Nothing listens on this port any more.
         let err = gateway(&url)
-            .fetch_with_token(TOKEN, UUID, None)
+            .fetch_with(Some(TOKEN), UUID, None)
             .unwrap_err();
         assert!(
             matches!(
@@ -689,17 +702,56 @@ mod tests {
     }
 
     #[test]
-    fn gateway_requires_token_variable() {
-        let err = gateway("http://127.0.0.1:9").fetch(UUID, None).unwrap_err();
-        assert_eq!(
-            err,
-            SourceError::MissingToken("AHT_TEST_UNSET_TOKEN_VAR".into())
-        );
-        assert!(err.to_string().contains("AHT_TEST_UNSET_TOKEN_VAR"));
+    fn gateway_without_token_sends_no_authorization() {
+        // `fetch` reads the (unset) variable and proceeds without a token.
+        let (url, req) = serve_once(200, body(Some("x"), None));
+        gateway(&url).fetch(UUID, None).unwrap();
+        let req = req.join().unwrap().to_lowercase();
+        assert!(!req.contains("authorization:"), "{req}");
         assert!(matches!(
-            gateway("http://127.0.0.1:9").fetch_with_token(TOKEN, "not-a-uuid", None),
+            gateway("http://127.0.0.1:9").fetch_with(Some(TOKEN), "not-a-uuid", None),
             Err(SourceError::InvalidReference(_))
         ));
+    }
+
+    #[test]
+    fn gateway_accepts_multi_segment_type_only() {
+        let (url, req) = serve_once(200, body(Some("x"), None));
+        gateway(&url)
+            .fetch_with(None, UUID, Some("claude/hook"))
+            .unwrap();
+        assert!(
+            req.join()
+                .unwrap()
+                .starts_with(&format!("GET /api/v2/documents/{UUID}?type=claude/hook "))
+        );
+        for bad in ["../x", "claude//hook", "/skill", "skill/", "a b"] {
+            assert_eq!(
+                gateway("http://127.0.0.1:9").fetch_with(None, UUID, Some(bad)),
+                Err(SourceError::InvalidReference(bad.into())),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn gateway_404_distinguishes_missing_page_from_missing_endpoint() {
+        let problem = format!(
+            r#"{{"type":"urn:wikijs-gateway:problem:page-not-found","title":"Page not found","status":404,"uuid":"{UUID}"}}"#
+        );
+        let (url, _req) = serve_once(404, problem);
+        assert_eq!(
+            gateway(&url).fetch_with(None, UUID, None),
+            Err(SourceError::NotFound(UUID.into()))
+        );
+        // An old or unknown route: plain 404 without the problem type.
+        let (url, _req) = serve_once(404, r#"{"detail":"Not Found"}"#.into());
+        let err = gateway(&url)
+            .fetch_with(Some(TOKEN), UUID, None)
+            .unwrap_err();
+        assert!(matches!(err, SourceError::ApiMismatch(_)), "{err:?}");
+        assert!(err.to_string().contains("/api/v2/documents/"));
+        assert!(!format!("{err} {err:?}").contains(TOKEN));
     }
 
     #[test]

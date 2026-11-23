@@ -63,8 +63,8 @@ ref = "local-one"           # directory relative to the local source
 - `backlog.path` must be `agent.db`.
 - Agent, source and skill IDs must be unique.
 - `local-dir` needs `path` and takes no `token_env`.
-- `wiki-gateway` needs `token_env` (matching `[A-Z_][A-Z0-9_]*`) and takes no `path`.
-- Each skill must reference an existing source. A `wiki-gateway` skill's `ref` must be a UUID, and its `type` must be a slug.
+- `wiki-gateway` needs `token_env` (matching `[A-Z_][A-Z0-9_]*`) and takes no `path`. The variable may be unset: the token is optional.
+- Each skill must reference an existing source. A `wiki-gateway` skill's `ref` must be a UUID, and its `type` must be slugs joined by `/` (for example `skill` or `claude/hook`).
 
 A local directory outside the project cannot be stored here, because shared files never hold absolute paths. The Stage 1 TUI therefore accepts only local source directories inside the project; copy outside skills into the project first.
 

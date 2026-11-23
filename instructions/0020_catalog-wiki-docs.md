@@ -15,7 +15,7 @@
 ## 범위
 - 포함:
   - 카탈로그 타입과 파싱·검증 (`serde`, `deny_unknown_fields`, `schema_version`, `kind`, 중복 `id`, 필드 규칙)
-  - 찾는 순서: 환경변수 경로 → 실행 파일 옆 `catalog/` → 내장 샘플(`include_str!`). 출처와 `catalog_version` 표시
+  - 찾는 순서: 환경변수 경로 → 실행 파일 옆 `catalog/` → 내장 샘플(`include_str!`). 출처와 `catalog_version`(있을 때) 표시
   - 저장소 `catalog/wiki.json`, `catalog/skills.json`, `catalog/docs.json` 샘플 작성. 실제 위키 페이지와 공개 스킬 일부를 담는다
   - 위키 항목 가져오기: 기존 가져오기·미리보기·적용 흐름 재사용, `archived` 항목과 `target`이 없는 항목은 가져오기 불가
   - `.harness/local.toml` 토큰 저장과 읽기. 우선순위는 `token_env` 변수 → 저장된 토큰. TUI에서 입력하되 비워 둬도 진행

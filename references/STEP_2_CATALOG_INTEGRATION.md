@@ -33,19 +33,20 @@ The bounded updater, override layers, modes, hooks, Git worktree, Worktrunk and 
 ## 3. Public skills catalog
 
 - Install through the official skills CLI only: `npx skills add` (vercel-labs/skills). Use `npx`; do not offer other package runners.
-- **The TUI runs the install only after the user confirms it.** The default scope is the project. When the user chooses the user scope, add `-g`.
-- Build the command from the entry's structured fields and the configured agents. Never take a command string from the catalog:
+- **The TUI runs the install only after the user confirms it.** The TUI decides only what to install. The skills CLI owns everything else and asks the user itself: target agents, project or user scope, which skills to pick, and the version given in `source`.
+- Build the command from the entry's structured fields. Never take a command string from the catalog, and do not add `-a`, `-g` or `-y`:
 
   ```text
-  npx skills add <source>[#<ref>] -s <skill> -a <agent>... -y [-g]
+  npx skills add <source> [-s <skill>]
   ```
 
-- Run it as an argument vector without a shell, with the project root as the working directory. On Windows run `npx.cmd`.
-- Show the full command before running. Afterwards show its output and exit code. A non-zero exit is a failure, not a success.
+  `-s` is left out when `skill` is omitted or `*`.
+- Run it as an argument vector without a shell, with the project root as the working directory. On Windows run `npx.cmd`. Do not generate a script file.
+- Name conflict check before confirmation: run `npx skills add <source> -l`, which lists the skill names without installing. If any name that would be installed (the entry's `skill`, or every listed name when installing all) matches a skill the harness already deployed, show a conflict and do not run the install. Verify the `-l` output format against the official docs at implementation time; if the names cannot be read reliably, show the check as unavailable instead of guessing.
+- Show the full command on the confirmation screen. On confirm, the TUI leaves raw mode and the alternate screen and hands the terminal to the CLI (inherited stdin, stdout and stderr), so the CLI's prompts reach the user directly. When the CLI exits, the TUI waits for Enter, restores its screen and shows the exit code. A non-zero exit is a failure, not a success.
 - If `npx` is not found, show the install action as unavailable.
-- The skills CLI owns where it installs and how it links. The harness does not take ownership of those files. If the harness already deployed a skill with the same name to an agent, show a conflict and do not run the install.
+- The skills CLI owns where it installs and how it links. The harness does not take ownership of those files.
 - Entries whose `installer` is not `skills-cli` (for example `claude plugin`) show their `install` text for the user to run. The TUI does not run them.
-- Check at implementation time whether `#<ref>` pinning works in the CLI. If it does not, show `version` as information only and say that the install is not pinned.
 
 ## 4. Documents catalog
 
@@ -66,7 +67,7 @@ The bounded updater, override layers, modes, hooks, Git worktree, Worktrunk and 
 - Malformed catalogs (unknown key, wrong `kind`, unsupported version, duplicate `id`, option-like `source` or `skill`) are rejected with a visible error.
 - A wiki entry with `target: "skill"` imports through gateway API v2 and records `contentHash`; other entries cannot be imported.
 - The gateway works without a token; a stored token is sent, never displayed, and never written to a tracked file.
-- Skill installs: the argument vector is correct for project and user scope; nothing runs without confirmation; the exit code is reported; a missing `npx` shows as unavailable; a name conflict with a harness deployment blocks the run. Tests use a stub executable instead of the real CLI.
+- Skill installs: the argument vector is correct with and without `skill`, and never contains `-a`, `-g` or `-y`; nothing runs without confirmation; the exit code is reported; a missing `npx` shows as unavailable; a name conflict with a harness deployment blocks the run. Tests use a stub executable instead of the real CLI; the interactive CLI session is checked by hand.
 - English and Korean documents stay equivalent.
 
 ## Deliverables

@@ -15,3 +15,4 @@
 01a1e6cf-6ba6-79dc-a8b9-f78e6f74cdf9 | 0015 TUI 종료 키: 첫 화면 Esc·입력 칸 밖 q 종료, 키 안내·사용 문서 갱신 (#20, PR #22) | 2026-11-17 09:22:48 +0900
 01a1e6cf-6ba8-7c9e-ab81-70e95764ab08 | 0016 지시서 경로 사용자 입력(기본 instructions): .completed·completed.log·지침·gitignore 연동, 이전 설정 호환, 명세 영/한 수정 (PR #23) | 2026-11-17 09:22:48 +0900
 01a1e6cf-6baa-7e82-8ce7-3c875bafb0d4 | 0017 agent.db 생성: rusqlite(bundled)로 지시서 루트에 DB, bash·PowerShell 관리 스크립트(create-only), completed.log 기준·추가만, AGENT_DB_ACTOR (#21, PR #23) | 2026-11-17 09:22:48 +0900
+01a1f80c-e91d-7389-8857-2a2178453de7 | 0018 위키 게이트웨이 v2 대응: /api/v2/documents/{uuid} 경로, 선택 토큰(token_env), 다단계 type, 비 problem 404를 API 불일치로 보고, wiki-skill-import 로컬 수정, 세 OS CI 통과 (PR #28, #30) | 2026-11-23 16:01:02 +0900

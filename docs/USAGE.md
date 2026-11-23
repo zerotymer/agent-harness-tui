@@ -2,7 +2,7 @@
 
 `agent-harness-tui` is a terminal wizard that sets up an agent harness in the project you run it from. It creates instruction folders, agent guidance (`AGENTS.md`, `CLAUDE.md` and their `_ko.md` pairs), shared skills under `.skills/`, and a `.gitignore` block. Every change is previewed first and written only when you confirm.
 
-This document covers Stage 1, initial creation, and the Stage 2 catalogs available so far: reading the three catalogs, importing wiki skills from the wiki catalog, and listing public skills and documents. Installing public skills comes later in Stage 2, and updating an existing harness is Stage 3.
+This document covers Stage 1, initial creation, and the Stage 2 catalogs: reading the three catalogs, importing wiki skills from the wiki catalog, installing public skills with the skills CLI, and listing documents. Updating an existing harness is Stage 3.
 
 ## Install
 
@@ -80,7 +80,25 @@ Each catalog is looked up in this order, and the first one found is used:
 2. `catalog/<kind>.json` next to the executable.
 3. The sample built into the executable (this repository's `catalog/`).
 
-A file with an unknown key, the wrong `kind`, an unsupported `schema_version` or a duplicate `id` is rejected with an error, and the tool does not fall back to another catalog. [카탈로그 보기] (view catalogs) on the skills step shows each catalog's origin, `catalog_version` and per-entry state: available, imported, archived, conflict (the `.skills/<id>/` folder already exists), or list only. Public skills and documents are list only for now.
+A file with an unknown key, the wrong `kind`, an unsupported `schema_version` or a duplicate `id` is rejected with an error, and the tool does not fall back to another catalog. [카탈로그 보기] (view catalogs) on the skills step shows each catalog's origin, `catalog_version` and per-entry state: available, imported, archived, conflict (the `.skills/<id>/` folder already exists), or list only. Documents are list only for now.
+
+## Installing public skills
+
+In [카탈로그 보기] (view catalogs), move to a public skill and press Enter to open its confirmation screen. It shows the exact command, which is built from the catalog entry and never taken as a command string:
+
+```text
+npx skills add <source> [-s <skill>]
+```
+
+- `-s` is left out when the entry has no `skill` or `*`; the CLI then offers every skill in the source.
+- The TUI adds no `-a`, `-g` or `-y`. When you press Enter, the TUI screen closes and the terminal is handed to the skills CLI, which asks for the target agents, project or user scope, and skills itself. When it exits, press Enter to return; the TUI shows the exit code, and anything other than 0 is a failure.
+- It runs without a shell in the project root (`npx.cmd` on Windows). If `npx` is not on `PATH`, installing shows as unavailable.
+- To pin a version, the catalog writes it into `source` in the CLI's syntax, for example `owner/repo@<commit-sha>`.
+- Name conflicts: if the entry's `skill` matches a skill the harness deployed or selected (ignoring case), the install is blocked. When installing every skill, names are not known in advance, so the screen warns that the check is unavailable.
+- The skills CLI owns what it installs (for example `.agents/skills/`, links under `.claude/skills/`, and `skills-lock.json`). The harness does not track or remove those files.
+- Entries for other installers (for example `claude plugin`) only show their command for you to run.
+
+Checked with skills CLI 1.9.0 (2026-11-23): `npx skills add anthropics/skills@<commit-sha> -s pdf` in an empty project installed `.agents/skills/pdf`, linked it into `.claude/skills/pdf`, and recorded the commit in `skills-lock.json`. That run was inside a coding agent, where the CLI does not prompt; the interactive prompts in a normal terminal still need a manual check.
 
 ## Running again
 

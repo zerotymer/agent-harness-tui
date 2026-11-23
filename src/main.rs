@@ -1,5 +1,6 @@
 //! Entry point: runs the wizard in the current directory (the project root).
 
+use agent_harness_tui::install;
 use agent_harness_tui::paths::ProjectRoot;
 use agent_harness_tui::tui::App;
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
@@ -45,6 +46,14 @@ fn main() -> ExitCode {
     let mut terminal = ratatui::init();
     let result = (|| -> std::io::Result<()> {
         while !app.quit {
+            if let Some(req) = app.take_run() {
+                // Hand the terminal to the skills CLI so its prompts reach
+                // the user, then take it back.
+                ratatui::restore();
+                let result = install::run_interactive(&req, app.root.path());
+                terminal = ratatui::init();
+                app.finish_run(result);
+            }
             terminal.draw(|f| app.render(f))?;
             // Resize events simply trigger the next redraw.
             if let Event::Key(k) = event::read()?

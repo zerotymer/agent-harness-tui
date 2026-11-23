@@ -65,4 +65,5 @@
 
 위키 원문과 달라진 로컬 사본은 다음과 같습니다(자세한 내용은 각 `source.json`에 있음).
 - **`git-worktree-guideline`:** 브랜치 이름, `{DATETIME}` 형식, `dev`/`fix` 규칙을 `git-branch-guideline` v1.1.0에 맞췄습니다. worktree 경로 매핑 `../.worktree/{BRANCH}`는 그대로입니다.
+- **`wiki-skill-import`:** 게이트웨이 API v2를 씁니다. MCP는 `/api/v2/mcp`, REST는 `GET /api/v2/documents/<uuid>`입니다. 읽기에는 토큰이 선택 사항이고, 스크립트에서는 `User-Agent`를 명시해야 합니다.
 - **`instruction-operating-rules`:** UUID 레지스트리를 없앴으므로 UUID는 로컬에서 생성만 합니다. `git-branch-guideline`의 UUID를 바로잡고 브랜치 형식을 맞췄습니다. 세션 파일은 `.claude/session`, 명세는 `references/`, 스킬 경로는 `.skills/`를 가리킵니다.

@@ -6,5 +6,6 @@
     "en": { "file": "SKILL.md", "updatedAt": "2026-06-28T12:25:36.744Z", "contentHash": "sha256:0e306d8fba8b7d173ab0e85ab2d40a93ec393cbc814b586025de5c6f6d5f9c1a" },
     "ko": { "file": "SKILL_ko.md", "updatedAt": "2026-06-28T12:25:48.030Z", "contentHash": "sha256:efb7b376b6ba866e3ec435069d3ee42e14d9d55c4cb0b2c8e478e5d10d790866" }
   },
-  "importedAt": "2026-11-16"
+  "importedAt": "2026-11-16",
+  "localChanges": "Gateway API v2 (wiki original unchanged): MCP URL /api/v2/mcp; REST GET /api/v2/documents/<uuid>[?type=]; token optional for reads but sent when available; explicit User-Agent note (Cloudflare 403 on Python-urllib)."
 }

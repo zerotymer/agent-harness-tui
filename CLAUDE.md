@@ -65,4 +65,5 @@ When you import a skill, add or update its row in this table and in `CLAUDE_ko.m
 
 Local copies that differ from the wiki (details in each `source.json`):
 - **`git-worktree-guideline`:** branch names, the `{DATETIME}` format, and the `dev`/`fix` rules now match `git-branch-guideline` v1.1.0. The worktree path mapping `../.worktree/{BRANCH}` is unchanged.
+- **`wiki-skill-import`:** uses gateway API v2: MCP at `/api/v2/mcp`, REST `GET /api/v2/documents/<uuid>`. A token is optional for reads, and scripts must set an explicit `User-Agent`.
 - **`instruction-operating-rules`:** the UUID registry is removed, so UUIDs are only generated locally. The `git-branch-guideline` UUID is corrected and branch formats are aligned. Session files go in `.claude/session`, specs live in `references/`, and skill paths point to `.skills/`.

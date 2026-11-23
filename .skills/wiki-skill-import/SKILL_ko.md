@@ -19,8 +19,8 @@ UUID를 기준으로 Wiki.js 콘텐츠를 읽는다. 모든 agent는 고정 gate
 
 ```text
 GATEWAY_URL=https://md-gw.zerotymer.net
-GATEWAY_MCP_URL=https://md-gw.zerotymer.net/mcp
-GATEWAY_TOKEN=<token>
+GATEWAY_MCP_URL=https://md-gw.zerotymer.net/api/v2/mcp
+GATEWAY_TOKEN=<token>   # 읽기는 선택
 ```
 
 Agent가 사용하는 gateway는 읽기 전용이다. 이 skill은 콘텐츠 읽기만 설명한다.
@@ -30,7 +30,9 @@ Agent가 사용하는 gateway는 읽기 전용이다. 이 skill은 콘텐츠 읽
 - 구조화된 콘텐츠 읽기는 고정 gateway 서버만 사용한다.
 - 클라이언트가 MCP를 지원하면 MCP 읽기 도구를 우선 사용한다.
 - MCP를 사용할 수 없으면 REST 읽기 endpoint를 사용한다.
-- REST gateway 요청에는 `Authorization: Bearer <GATEWAY_TOKEN>`을 사용한다.
+- 현재 읽기는 토큰이 필요 없다. 그래도 토큰이 있으면 `Authorization: Bearer <GATEWAY_TOKEN>`을
+  보낸다. 이후 버전에서 필수가 될 수 있다.
+- 스크립트에서 REST endpoint를 호출할 때는 `User-Agent`를 명시한다 (아래 참고).
 - Wiki.js GraphQL에 직접 접근하지 않는다.
 - `curl`은 사용하지 않는다.
 - Wiki.js HTML을 기본 데이터 소스로 가져오지 않는다.
@@ -46,7 +48,7 @@ Agent가 사용하는 gateway는 읽기 전용이다. 이 skill은 콘텐츠 읽
 MCP를 사용할 수 있으면 다음 서버에 연결한다.
 
 ```text
-https://md-gw.zerotymer.net/mcp
+https://md-gw.zerotymer.net/api/v2/mcp
 ```
 
 `get_page_by_uuid`에 대응하는 읽기 도구를 사용한다.
@@ -72,12 +74,23 @@ MCP를 사용할 수 없으면 gateway REST 읽기 endpoint로 영어와 한국�
 함께 조회한다.
 
 ```text
-GET /pages/by-uuid?uuid=<uuid>[&type=<type>]
-Authorization: Bearer <GATEWAY_TOKEN>
+GET https://md-gw.zerotymer.net/api/v2/documents/<uuid>[?type=<type>]
+Authorization: Bearer <GATEWAY_TOKEN>   # 선택
 ```
 
 `type` 파라미터는 MCP 입력과 같은 규칙을 따른다. 호출자가 경로 prefix를
 제공한 경우에만 전달한다.
+
+### User-Agent
+
+Gateway는 Cloudflare 뒤에 있으며, 일부 기본 클라이언트 User-Agent를 403으로
+거부한다. 특히 Python의 `Python-urllib/3.x`가 해당된다. 대부분의 HTTP
+클라이언트는 문제없다. Python(`urllib`, 스크립트, 도구)에서는 User-Agent를
+명시한다.
+
+```python
+req = urllib.request.Request(url, headers={"User-Agent": "my-tool/1.0"})
+```
 
 ## 응답 형태
 
@@ -165,10 +178,10 @@ skills/<skill-name>/
 
 | 상황 | 처리 |
 | --- | --- |
-| MCP 사용 불가 | `GATEWAY_TOKEN`이 있으면 REST 읽기 endpoint 사용 |
-| REST용 gateway token 없음 | `GATEWAY_TOKEN`을 사용할 수 없다고 보고하고 중단 |
+| MCP 사용 불가 | REST 읽기 endpoint 사용 (토큰 불필요) |
 | gateway 연결 실패 | 고정 gateway URL과 UUID를 보고하고 중단 |
-| 401 / 403 | 인증 또는 권한 실패로 보고하고 중단 |
+| 본문이 plain text/HTML이고 `X-Served-By` 헤더 없는 403 | Cloudflare의 User-Agent 차단; User-Agent를 명시하고 재시도 |
+| 그 외 401 / 403 | 인증 또는 권한 실패로 보고하고 중단 |
 | 두 locale 모두 없음 | `PAGE_NOT_FOUND`를 보고하고, best-effort 요청이 없으면 중단 |
 | 한 locale만 없음 | 사용자가 partial import를 허용한 경우에만 가능한 locale 사용 |
 | `content` 비어 있음 | 경고하고 빈 파일은 쓰지 않음 |

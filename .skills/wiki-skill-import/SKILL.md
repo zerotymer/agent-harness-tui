@@ -20,8 +20,8 @@ Both interfaces are read-only for this skill.
 
 ```text
 GATEWAY_URL=https://md-gw.zerotymer.net
-GATEWAY_MCP_URL=https://md-gw.zerotymer.net/mcp
-GATEWAY_TOKEN=<token>
+GATEWAY_MCP_URL=https://md-gw.zerotymer.net/api/v2/mcp
+GATEWAY_TOKEN=<token>   # optional for reads
 ```
 
 The gateway is read-only for agent use. This skill only describes content reads.
@@ -31,7 +31,10 @@ The gateway is read-only for agent use. This skill only describes content reads.
 - Use only the fixed gateway server for structured content reads.
 - Prefer the MCP read tool when the client supports MCP.
 - Use the REST read endpoint when MCP is unavailable.
-- Use `Authorization: Bearer <GATEWAY_TOKEN>` for REST gateway requests.
+- Reads do not require a token today. Send `Authorization: Bearer <GATEWAY_TOKEN>`
+  anyway when you have one; a future version may require it.
+- When calling the REST endpoint from a script, set an explicit `User-Agent`
+  (see below).
 - Do not access Wiki.js GraphQL directly.
 - Do not use `curl`.
 - Do not fetch Wiki.js HTML as the primary data source.
@@ -47,7 +50,7 @@ whether the page exists. It is not a data source for automated import.
 When MCP is available, connect to:
 
 ```text
-https://md-gw.zerotymer.net/mcp
+https://md-gw.zerotymer.net/api/v2/mcp
 ```
 
 Use the read tool corresponding to `get_page_by_uuid`.
@@ -73,12 +76,22 @@ When MCP is unavailable, retrieve English and Korean content together through th
 gateway REST read endpoint:
 
 ```text
-GET /pages/by-uuid?uuid=<uuid>[&type=<type>]
-Authorization: Bearer <GATEWAY_TOKEN>
+GET https://md-gw.zerotymer.net/api/v2/documents/<uuid>[?type=<type>]
+Authorization: Bearer <GATEWAY_TOKEN>   # optional
 ```
 
 The `type` parameter follows the same rule as the MCP input: pass it only when
 the caller provides a path prefix.
+
+### User-Agent
+
+The gateway sits behind Cloudflare, which rejects some default client
+User-Agents with 403 — notably Python's `Python-urllib/3.x`. Most HTTP clients
+are fine. From Python (`urllib`, scripts, tools), set an explicit User-Agent:
+
+```python
+req = urllib.request.Request(url, headers={"User-Agent": "my-tool/1.0"})
+```
 
 ## Response Shape
 
@@ -167,10 +180,10 @@ When exporting a revised Wiki.js document inside this repository, do not edit
 
 | Situation | Action |
 | --- | --- |
-| MCP unavailable | Use the REST read endpoint if `GATEWAY_TOKEN` is available |
-| Missing gateway token for REST | Report that `GATEWAY_TOKEN` is unavailable; stop |
+| MCP unavailable | Use the REST read endpoint (no token required) |
 | Gateway unreachable | Report the fixed gateway URL and UUID; stop |
-| 401 / 403 | Report authentication or permission failure; stop |
+| 403 with a plain-text/HTML body and no `X-Served-By` header | Cloudflare blocked the User-Agent; set an explicit User-Agent and retry |
+| Other 401 / 403 | Report authentication or permission failure; stop |
 | Both locales missing | Report `PAGE_NOT_FOUND`; stop unless best-effort is requested |
 | One locale missing | Use the available locale only if the user accepts a partial import |
 | Empty `content` | Warn and do not write an empty file |

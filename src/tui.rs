@@ -5,11 +5,15 @@
 //! access (skill fetch) happens only when the user activates a button.
 //! Nothing is written before the explicit apply on the preview step.
 
+use crate::catalog::{
+    Catalog, CatalogError, Catalogs, Origin, SKILLS_CLI, Status, Target, WikiEntry,
+};
 use crate::contract::{
     AgentConfig, AgentId, DEFAULT_TOKEN_ENV, HarnessConfig, Placement, SkillConfig, SourceConfig,
-    SourceKind,
+    SourceKind, WIKI_GATEWAY_URL,
 };
 use crate::init::{self, Loaded, PendingImport, Prepared};
+use crate::local::{self, Secret};
 use crate::paths::{HiddenAttr, Layout, ProjectRoot, RelPath};
 use crate::placement::{Method, agent_name, methods, skills_dir};
 use crate::sources::{CatalogEntry, LocalDir, Package, SkillSource, WikiGateway, slugify};
@@ -28,6 +32,8 @@ pub enum Step {
     Skills,
     Preview,
     Done,
+    /// Read-only view of the three catalogs, opened from the skills step.
+    Catalog,
 }
 
 const STEPS: [(Step, &str); 6] = [
@@ -42,14 +48,16 @@ const STEPS: [(Step, &str); 6] = [
 /// Rows on the skills step.
 const SK_KIND: usize = 0;
 const SK_LOCATION: usize = 1;
-const SK_TYPE: usize = 2;
-const SK_REF: usize = 3;
-const SK_FETCH: usize = 4;
-const SK_NAME: usize = 5;
-const SK_PARTIAL: usize = 6;
-const SK_ADD: usize = 7;
-const SK_LIST: usize = 8;
-const SK_FIXED_ROWS: usize = 9;
+const SK_TOKEN: usize = 2;
+const SK_TYPE: usize = 3;
+const SK_REF: usize = 4;
+const SK_FETCH: usize = 5;
+const SK_NAME: usize = 6;
+const SK_PARTIAL: usize = 7;
+const SK_ADD: usize = 8;
+const SK_LIST: usize = 9;
+const SK_CATALOGS: usize = 10;
+const SK_FIXED_ROWS: usize = 11;
 
 pub struct App {
     pub root: ProjectRoot,
@@ -70,6 +78,12 @@ pub struct App {
     wiki: bool,
     local_dir: String,
     token_env: String,
+    /// Token typed in this session; never rendered.
+    token: String,
+    /// Token from `.harness/local.toml`, or why it could not be read.
+    stored_token: Result<Option<Secret>, String>,
+    gateway_url: String,
+    catalogs: Catalogs,
     page_type: String,
     reference: String,
     skill_name: String,
@@ -82,11 +96,15 @@ pub struct App {
     // steps 5-6 and the initialized summary
     prepared: Option<Result<Prepared, String>>,
     result: Option<Result<(crate::apply::ApplyReport, HiddenAttr), String>>,
+    /// Outcome of saving the typed token after a successful apply.
+    token_saved: Option<Result<(), String>>,
 }
 
 impl App {
     pub fn new(root: ProjectRoot) -> Self {
         let loaded = init::load(&root);
+        let catalogs = Catalogs::load(root.path());
+        let stored_token = local::load_token(root.path());
         let mut app = Self {
             root,
             loaded,
@@ -106,6 +124,10 @@ impl App {
             wiki: false,
             local_dir: String::new(),
             token_env: DEFAULT_TOKEN_ENV.into(),
+            token: String::new(),
+            stored_token,
+            gateway_url: WIKI_GATEWAY_URL.into(),
+            catalogs,
             page_type: "skill".into(),
             reference: String::new(),
             skill_name: String::new(),
@@ -116,6 +138,7 @@ impl App {
             local_locked: None,
             prepared: None,
             result: None,
+            token_saved: None,
         };
         // Already initialized: summary and a read-only verification only.
         if let Ok(Loaded {
@@ -198,7 +221,10 @@ impl App {
     fn focus_is_input(&self) -> bool {
         match self.step {
             Step::Paths => self.focus <= 2,
-            Step::Skills => matches!(self.focus, SK_LOCATION | SK_TYPE | SK_REF | SK_NAME),
+            Step::Skills => matches!(
+                self.focus,
+                SK_LOCATION | SK_TOKEN | SK_TYPE | SK_REF | SK_NAME
+            ),
             _ => false,
         }
     }
@@ -210,6 +236,7 @@ impl App {
             (Step::Paths, 2) => Some(&mut self.instructions),
             (Step::Skills, SK_LOCATION) if self.wiki => Some(&mut self.token_env),
             (Step::Skills, SK_LOCATION) if self.local_locked.is_none() => Some(&mut self.local_dir),
+            (Step::Skills, SK_TOKEN) if self.wiki => Some(&mut self.token),
             (Step::Skills, SK_TYPE) if self.wiki => Some(&mut self.page_type),
             (Step::Skills, SK_REF) => Some(&mut self.reference),
             (Step::Skills, SK_NAME) => Some(&mut self.skill_name),
@@ -254,6 +281,10 @@ impl App {
                 self.prepared = None;
                 Step::Skills
             }
+            Step::Catalog => {
+                self.focus = SK_CATALOGS;
+                Step::Skills
+            }
         };
     }
 
@@ -288,11 +319,13 @@ impl App {
                 SK_FETCH => self.fetch(),
                 SK_ADD => self.add_import(),
                 SK_LIST => self.load_catalog(),
+                SK_CATALOGS => self.go(Step::Catalog),
                 n if n >= SK_FIXED_ROWS => self.pick_catalog(n - SK_FIXED_ROWS),
                 _ => self.open_preview(),
             },
             Step::Preview => self.apply(),
             Step::Done => self.quit = true,
+            Step::Catalog => self.back(),
         }
     }
 
@@ -339,7 +372,40 @@ impl App {
     }
 
     fn gateway(&self) -> WikiGateway {
-        WikiGateway::new(self.token_env.trim())
+        let stored = self.stored_token.as_ref().ok().cloned().flatten();
+        WikiGateway {
+            base_url: self.gateway_url.clone(),
+            stored_token: Secret::new(&self.token).or(stored),
+            ..WikiGateway::new(self.token_env.trim())
+        }
+    }
+
+    /// Import state of a wiki catalog entry.
+    fn wiki_state(&self, e: &WikiEntry) -> &'static str {
+        if e.status == Status::Archived {
+            return "보관됨";
+        }
+        if e.target != Some(Target::Skill) {
+            return "목록만";
+        }
+        let in_lock = self.loaded.as_ref().is_ok_and(|l| {
+            l.lock
+                .skills
+                .iter()
+                .any(|s| s.reference.eq_ignore_ascii_case(&e.uuid))
+        });
+        if in_lock
+            || self
+                .imports
+                .iter()
+                .any(|i| i.reference.eq_ignore_ascii_case(&e.uuid))
+        {
+            return "가져옴";
+        }
+        if self.root.abs(&Layout::skills().join(&e.id)).exists() {
+            return "충돌";
+        }
+        "사용 가능"
     }
 
     fn page_type(&self) -> Option<String> {
@@ -348,9 +414,38 @@ impl App {
     }
 
     fn load_catalog(&mut self) {
-        let listed = if self.wiki {
-            self.gateway().list()
-        } else {
+        if self.wiki {
+            match &self.catalogs.wiki {
+                Ok(c) => {
+                    self.catalog = c
+                        .entries
+                        .iter()
+                        .map(|e| CatalogEntry {
+                            reference: e.uuid.to_lowercase(),
+                            title: e.title.display().to_string(),
+                            page_type: Some(e.page_type.clone()),
+                            name: Some(e.id.clone()),
+                            blocked: match self.wiki_state(e) {
+                                "보관됨" => Some("보관된 항목은 가져올 수 없습니다".into()),
+                                "목록만" => Some("목록 전용 항목입니다".into()),
+                                _ => None,
+                            },
+                        })
+                        .collect();
+                    self.message = Some(format!(
+                        "위키 카탈로그 {}개 항목 ({})",
+                        c.entries.len(),
+                        catalog_source(c)
+                    ));
+                }
+                Err(e) => {
+                    self.catalog.clear();
+                    self.message = Some(format!("위키 카탈로그 오류: {}", error_text(e)));
+                }
+            }
+            return;
+        }
+        let listed = {
             match self.local_source() {
                 Ok((_, src)) => src.list(),
                 Err(e) => {
@@ -363,11 +458,6 @@ impl App {
             Ok(list) => {
                 self.message = Some(if list.is_empty() {
                     "목록이 비어 있습니다.".into()
-                } else if list.iter().any(|e| e.dummy) {
-                    format!(
-                        "{}개 항목 (더미 목록: 실제 위키 목록 조회는 아직 지원하지 않습니다)",
-                        list.len()
-                    )
                 } else {
                     format!("{}개 항목", list.len())
                 });
@@ -379,11 +469,15 @@ impl App {
 
     fn pick_catalog(&mut self, i: usize) {
         if let Some(e) = self.catalog.get(i) {
+            if let Some(why) = &e.blocked {
+                self.message = Some(format!("`{}`: {why}.", e.title));
+                return;
+            }
             self.reference = e.reference.clone();
             if let Some(t) = &e.page_type {
                 self.page_type = t.clone();
             }
-            self.skill_name = slugify(&e.title);
+            self.skill_name = e.name.clone().unwrap_or_else(|| slugify(&e.title));
             self.fetched = None;
             self.focus = SK_FETCH;
             self.message = Some(format!("`{}` 선택됨. [조회]로 내용을 가져오세요.", e.title));
@@ -542,10 +636,17 @@ impl App {
         let Ok(loaded) = &mut self.loaded else {
             return;
         };
-        self.result = Some(
-            init::apply_prepared(&self.root, prepared, &mut loaded.state)
-                .map_err(|e| e.to_string()),
-        );
+        let result = init::apply_prepared(&self.root, prepared, &mut loaded.state)
+            .map_err(|e| e.to_string());
+        // The typed token is kept only after a successful apply.
+        let applied = matches!(&result, Ok((r, _)) if r.failed.is_none());
+        let stored = self.stored_token.as_ref().ok().cloned().flatten();
+        if let Some(token) =
+            Secret::new(&self.token).filter(|t| applied && Some(t) != stored.as_ref())
+        {
+            self.token_saved = Some(local::save_token(self.root.path(), &token));
+        }
+        self.result = Some(result);
         self.go(Step::Done);
     }
 
@@ -567,7 +668,7 @@ impl App {
         } else {
             let [head, main] =
                 Split::vertical([Constraint::Length(1), Constraint::Min(2)]).areas(body);
-            let i = STEPS.iter().position(|(s, _)| *s == self.step).unwrap_or(0);
+            let i = self.step_index();
             f.render_widget(Paragraph::new(format!("{}/6 {}", i + 1, STEPS[i].1)), head);
             self.render_main(f, main);
         }
@@ -579,17 +680,23 @@ impl App {
         );
     }
 
+    /// Sidebar position; the catalog view belongs to the skills step.
+    fn step_index(&self) -> usize {
+        let shown = match self.step {
+            Step::Catalog => Step::Skills,
+            s => s,
+        };
+        STEPS.iter().position(|(s, _)| *s == shown).unwrap_or(0)
+    }
+
     fn step_list(&self) -> Vec<Line<'static>> {
+        let current = self.step_index();
         STEPS
             .iter()
             .enumerate()
-            .map(|(i, (s, name))| {
-                let text = format!(
-                    "{} {} {name}",
-                    if *s == self.step { "▸" } else { " " },
-                    i + 1
-                );
-                if *s == self.step {
+            .map(|(i, (_, name))| {
+                let text = format!("{} {} {name}", if i == current { "▸" } else { " " }, i + 1);
+                if i == current {
                     Line::styled(text, Style::new().add_modifier(Modifier::BOLD))
                 } else {
                     Line::raw(text)
@@ -609,12 +716,13 @@ impl App {
             Step::Skills => {
                 "↑↓ 이동  Space 선택  Enter 버튼 실행·다음  Esc 이전  Ctrl+C 취소".into()
             }
+            Step::Catalog => "↑↓ PgUp PgDn 스크롤  Enter·Esc 돌아가기  q 종료".into(),
             _ => "↑↓ 이동  Space 선택  Enter 다음  Esc 이전  Ctrl+C 취소".into(),
         }
     }
 
     fn render_main(&self, f: &mut Frame, area: Rect) {
-        let i = STEPS.iter().position(|(s, _)| *s == self.step).unwrap_or(0);
+        let i = self.step_index();
         let mut lines = match self.step {
             Step::Root => self.root_lines(),
             Step::Paths => self.paths_lines(),
@@ -622,6 +730,7 @@ impl App {
             Step::Skills => self.skill_lines(),
             Step::Preview => self.preview_lines(),
             Step::Done => self.result_lines(),
+            Step::Catalog => self.catalog_lines(),
         };
         if let Some(m) = &self.message {
             lines.push(Line::raw(""));
@@ -630,7 +739,11 @@ impl App {
                 Style::new().add_modifier(Modifier::BOLD),
             ));
         }
-        let title = format!(" {}. {} ", i + 1, STEPS[i].1);
+        let title = if self.step == Step::Catalog {
+            format!(" {}. {} ─ 카탈로그 ", i + 1, STEPS[i].1)
+        } else {
+            format!(" {}. {} ", i + 1, STEPS[i].1)
+        };
         f.render_widget(
             Paragraph::new(lines)
                 .wrap(Wrap { trim: false })
@@ -810,6 +923,21 @@ impl App {
         } else {
             format!("로컬 폴더: {}", input(&self.local_dir, f == SK_LOCATION))
         };
+        let token = if self.wiki {
+            // The value itself is never drawn.
+            let state = match (&self.stored_token, self.token.trim().is_empty()) {
+                (_, false) => "입력됨 (표시하지 않음, 적용 후 .harness/local.toml에 저장)",
+                (Ok(Some(_)), true) => "저장된 토큰 사용",
+                (Ok(None), true) => "없음 (토큰 없이 진행)",
+                (Err(_), true) => "저장된 토큰을 읽지 못함",
+            };
+            format!(
+                "게이트웨이 토큰(선택): {state}{}",
+                if f == SK_TOKEN { "▏" } else { "" }
+            )
+        } else {
+            "게이트웨이 토큰: 해당 없음".into()
+        };
         let page_type = if self.wiki {
             format!(
                 "경로 접두어(type): {}",
@@ -826,6 +954,7 @@ impl App {
         let mut v = vec![
             self.row(SK_KIND, format!("소스: {kind}")),
             self.row(SK_LOCATION, location),
+            self.row(SK_TOKEN, token),
             self.row(SK_TYPE, page_type),
             self.row(
                 SK_REF,
@@ -850,13 +979,31 @@ impl App {
                 ),
             ),
             self.row(SK_ADD, "[추가] 선택 목록에 넣기".into()),
-            self.row(SK_LIST, "[목록 불러오기]".into()),
+            self.row(
+                SK_LIST,
+                if self.wiki {
+                    "[목록 불러오기] 위키 카탈로그".into()
+                } else {
+                    "[목록 불러오기]".into()
+                },
+            ),
+            self.row(
+                SK_CATALOGS,
+                "[카탈로그 보기] 위키·스킬·문서의 출처·버전·상태".into(),
+            ),
         ];
+        if let (true, Err(e)) = (self.wiki, &self.stored_token) {
+            v.push(Line::raw(format!("  토큰 파일 오류: {e}")));
+        }
         for (i, e) in self.catalog.iter().enumerate() {
-            let dummy = if e.dummy { " (더미)" } else { "" };
+            let note = e
+                .blocked
+                .as_ref()
+                .map(|b| format!(" ({b})"))
+                .unwrap_or_default();
             v.push(self.row(
                 SK_FIXED_ROWS + i,
-                format!("  {}  {}{dummy}", e.title, e.reference),
+                format!("  {}  {}{note}", e.title, e.reference),
             ));
         }
         if let Some(p) = &self.fetched {
@@ -956,10 +1103,106 @@ impl App {
             Some(Err(e)) => v.push(Line::raw(format!("적용하지 않았습니다: {e}"))),
             None => {}
         }
+        match &self.token_saved {
+            Some(Ok(())) => v.push(Line::raw(format!(
+                "게이트웨이 토큰을 {}에 저장했습니다 (Git 무시 경로).",
+                local::LOCAL_FILE
+            ))),
+            Some(Err(e)) => v.push(Line::raw(format!("게이트웨이 토큰 저장 실패: {e}"))),
+            None => {}
+        }
         v.push(Line::raw(""));
         v.push(Line::raw("Git 커밋·푸시는 하지 않았습니다."));
         v
     }
+
+    fn catalog_lines(&self) -> Vec<Line<'static>> {
+        let mut v = vec![
+            Line::raw("카탈로그는 로컬 파일만 읽습니다. 네트워크로 내려받지 않습니다."),
+            Line::raw(""),
+        ];
+        let c = &self.catalogs;
+        v.push(catalog_head("위키", &c.wiki));
+        if let Ok(w) = &c.wiki {
+            for e in &w.entries {
+                v.push(Line::raw(format!(
+                    "  [{}] {}  {}  (type {})",
+                    self.wiki_state(e),
+                    e.id,
+                    e.title.display(),
+                    e.page_type
+                )));
+            }
+        }
+        v.push(Line::raw(""));
+        v.push(catalog_head("공개 스킬", &c.skills));
+        if let Ok(s) = &c.skills {
+            for e in &s.entries {
+                v.push(Line::raw(format!(
+                    "  [목록만] {}  {}  ← {} {}",
+                    e.id,
+                    e.title.display(),
+                    e.installer,
+                    e.source
+                )));
+                if e.installer == SKILLS_CLI {
+                    let skill = e.skill.as_deref().unwrap_or("*");
+                    v.push(Line::raw(format!("      스킬: {skill} (설치는 이후 단계)")));
+                } else if let Some(cmd) = &e.install {
+                    v.push(Line::raw(format!("      직접 실행: {cmd}")));
+                }
+            }
+        }
+        v.push(Line::raw(""));
+        v.push(catalog_head("문서", &c.docs));
+        if let Ok(d) = &c.docs {
+            for e in &d.entries {
+                v.push(Line::raw(format!(
+                    "  [목록만] {}  {}  → {}",
+                    e.id,
+                    e.title.display(),
+                    e.filename
+                )));
+                v.push(Line::raw(format!("      {}", e.url)));
+            }
+        }
+        v
+    }
+}
+
+fn origin_text(o: &Origin) -> String {
+    match o {
+        Origin::Env(p) => format!("환경변수 경로 {}", p.display()),
+        Origin::BesideExe(p) => format!("실행 파일 옆 {}", p.display()),
+        Origin::Builtin => "내장 샘플".into(),
+    }
+}
+
+fn catalog_source<E>(c: &Catalog<E>) -> String {
+    match &c.catalog_version {
+        Some(ver) => format!("출처: {}, 버전 {ver}", origin_text(&c.origin)),
+        None => format!("출처: {}", origin_text(&c.origin)),
+    }
+}
+
+fn error_text(e: &CatalogError) -> String {
+    format!(
+        "{} — {} (이 카탈로그는 사용하지 않습니다)",
+        origin_text(&e.origin),
+        e.message
+    )
+}
+
+fn catalog_head<E>(name: &str, c: &Result<Catalog<E>, CatalogError>) -> Line<'static> {
+    let text = match c {
+        Ok(c) => format!(
+            "{name} 카탈로그 ({}) {}개",
+            catalog_source(c),
+            c.entries.len()
+        ),
+        Err(e) => format!("{name} 카탈로그 오류: {}", error_text(e)),
+    };
+    Line::styled(text, Style::new().add_modifier(Modifier::BOLD))
 }
 
 fn git_lines(g: &crate::gitignore::GitReport) -> Vec<Line<'static>> {
@@ -1279,20 +1522,176 @@ mod tests {
         assert!(toml.contains("path = \"vendor\"") && toml.contains("id = \"review\""));
     }
 
+    fn to_wiki_list(app: &mut App) {
+        for _ in 0..3 {
+            key(app, KeyCode::Enter);
+        }
+        assert_eq!(app.step, Step::Skills);
+        key(app, KeyCode::Char(' ')); // switch to wiki
+        app.focus = SK_LIST;
+        key(app, KeyCode::Enter);
+    }
+
     #[test]
-    fn wiki_catalog_is_marked_dummy() {
+    fn wiki_catalog_lists_and_blocks_archived_and_doc_entries() {
+        let p = TempProject::new();
+        let mut app = p.app();
+        let parsed = crate::catalog::parse::<WikiEntry>(
+            r#"{"schema_version":1,"kind":"wiki","catalog_version":"t1","entries":[
+              {"id":"live","uuid":"14CEA96F-F1E2-461E-B9A7-96B5A6F63B67","type":"claude/hook","target":"skill","title":{"ko":"라이브"}},
+              {"id":"old","uuid":"e03f48fb-3e00-41d7-b99d-c32854567d67","type":"skill","target":"skill","status":"archived","title":{"en":"Old"}},
+              {"id":"page","uuid":"5c502e34-1daf-44d7-b740-1baa03e583e5","type":"doc","title":{"en":"Page"}}]}"#,
+        )
+        .unwrap();
+        app.catalogs.wiki = Ok(Catalog {
+            origin: Origin::Builtin,
+            catalog_version: parsed.catalog_version,
+            entries: parsed.entries,
+        });
+        to_wiki_list(&mut app);
+        assert_eq!(app.catalog.len(), 3);
+        let text = screen(&app, 120, 40);
+        assert!(
+            text.contains("내장 샘플") && text.contains("버전 t1"),
+            "{text}"
+        );
+        for i in [1, 2] {
+            app.focus = SK_FIXED_ROWS + i;
+            key(&mut app, KeyCode::Enter);
+            assert!(app.reference.is_empty(), "entry {i} must not be picked");
+        }
+        app.focus = SK_FIXED_ROWS;
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.reference, "14cea96f-f1e2-461e-b9a7-96b5a6f63b67");
+        assert_eq!(app.page_type, "claude/hook");
+        assert_eq!(app.skill_name, "live");
+        assert_eq!(app.focus, SK_FETCH);
+    }
+
+    #[test]
+    fn broken_wiki_catalog_is_shown_not_replaced() {
+        let p = TempProject::new();
+        let mut app = p.app();
+        app.catalogs.wiki = Err(crate::catalog::CatalogError {
+            origin: Origin::Env(p.0.join("bad.json")),
+            message: "unsupported schema_version 2".into(),
+        });
+        to_wiki_list(&mut app);
+        assert!(app.catalog.is_empty());
+        let text = screen(&app, 120, 40);
+        assert!(text.contains("unsupported schema_version 2"), "{text}");
+    }
+
+    /// Serves one canned 200 response and returns the raw request.
+    fn serve_once(body: String) -> (String, std::thread::JoinHandle<String>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let mut req = Vec::new();
+            while !req.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                req.extend_from_slice(&buf[..n]);
+            }
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(resp.as_bytes()).unwrap();
+            String::from_utf8_lossy(&req).into_owned()
+        });
+        (url, handle)
+    }
+
+    #[test]
+    fn wiki_catalog_import_through_mock_gateway_saves_token() {
+        const TOKEN: &str = "tui-token-3b9d";
+        let p = TempProject::new();
+        let mut app = p.app();
+        let body = r##"{"uuid":"14cea96f-f1e2-461e-b9a7-96b5a6f63b67","type":"skill","pages":{
+            "en":{"title":"wiki-skill-import","content":"# en\n","contentHash":"sha256:e1"},
+            "ko":{"title":"wiki-skill-import","content":"# ko\n","contentHash":"sha256:k1"}}}"##;
+        let (url, req) = serve_once(body.into());
+        app.gateway_url = url;
+        to_wiki_list(&mut app);
+        app.focus = SK_TOKEN;
+        typed(&mut app, TOKEN);
+        assert!(!screen(&app, 120, 40).contains(TOKEN));
+        // First built-in entry: wiki-skill-import.
+        app.focus = SK_FIXED_ROWS;
+        key(&mut app, KeyCode::Enter);
+        key(&mut app, KeyCode::Enter); // fetch
+        let req = req.join().unwrap().to_lowercase();
+        assert!(
+            req.starts_with(
+                "get /api/v2/documents/14cea96f-f1e2-461e-b9a7-96b5a6f63b67?type=skill "
+            )
+        );
+        assert!(req.contains(&format!("authorization: bearer {TOKEN}")));
+        assert!(app.fetched.is_some(), "{:?}", app.message);
+        app.focus = SK_ADD;
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.imports.len(), 1);
+        app.focus = SK_KIND;
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.step, Step::Preview);
+        assert!(!screen(&app, 120, 60).contains(TOKEN));
+        key(&mut app, KeyCode::Enter); // apply
+        assert_eq!(app.step, Step::Done);
+        assert_eq!(
+            fs::read_to_string(p.0.join(".skills/wiki-skill-import/SKILL_ko.md")).unwrap(),
+            "# ko\n"
+        );
+        let lock = fs::read_to_string(p.0.join("harness.lock.json")).unwrap();
+        assert!(lock.contains("sha256:e1") && lock.contains("sha256:k1"));
+        let done = screen(&app, 120, 60);
+        assert!(done.contains(".harness/local.toml") && !done.contains(TOKEN));
+        let stored = crate::local::load_token(&p.0).unwrap().unwrap();
+        assert_eq!(stored.expose(), TOKEN);
+        for tracked in ["harness.toml", "harness.lock.json", ".gitignore"] {
+            let text = fs::read_to_string(p.0.join(tracked)).unwrap();
+            assert!(!text.contains(TOKEN), "{tracked}");
+        }
+        assert!(
+            fs::read_to_string(p.0.join(".gitignore"))
+                .unwrap()
+                .contains("/.harness/")
+        );
+    }
+
+    #[test]
+    fn catalog_view_shows_three_catalogs_and_returns() {
         let p = TempProject::new();
         let mut app = p.app();
         for _ in 0..3 {
             key(&mut app, KeyCode::Enter);
         }
-        key(&mut app, KeyCode::Char(' ')); // switch to wiki
-        app.focus = SK_LIST;
+        app.focus = SK_CATALOGS;
         key(&mut app, KeyCode::Enter);
-        assert!(!app.catalog.is_empty());
-        let text = screen(&app, 120, 40);
-        assert!(text.contains("(더미)"));
-        assert!(text.contains("더미 목록"));
+        assert_eq!(app.step, Step::Catalog);
+        let text = screen(&app, 140, 60);
+        for want in [
+            "위키 카탈로그",
+            "공개 스킬 카탈로그",
+            "문서 카탈로그",
+            "내장 샘플",
+            "버전 2026.11.23",
+            "[사용 가능] wiki-skill-import",
+            "직접 실행: claude plugin",
+            "anthropics-skills-README.md",
+            "4 소스·스킬",
+        ] {
+            assert!(text.contains(want), "{want}\n{text}");
+        }
+        key(&mut app, KeyCode::Esc);
+        assert_eq!(app.step, Step::Skills);
+        assert_eq!(app.focus, SK_CATALOGS);
+        assert_eq!(files_in(&p.0), 0, "viewing catalogs writes nothing");
     }
 
     #[test]

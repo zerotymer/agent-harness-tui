@@ -2,7 +2,7 @@
 
 `agent-harness-tui` is a terminal wizard that sets up an agent harness in the project you run it from. It creates instruction folders, agent guidance (`AGENTS.md`, `CLAUDE.md` and their `_ko.md` pairs), shared skills under `.skills/`, and a `.gitignore` block. Every change is previewed first and written only when you confirm.
 
-This document covers Stage 1, initial creation. Catalogs are Stage 2 and updating an existing harness is Stage 3; neither is available yet.
+This document covers Stage 1, initial creation, and the Stage 2 catalogs available so far: reading the three catalogs, importing wiki skills from the wiki catalog, and listing public skills and documents. Installing public skills comes later in Stage 2, and updating an existing harness is Stage 3.
 
 ## Install
 
@@ -54,6 +54,7 @@ Keys: ↑↓ move, Space toggles, Enter goes to the next step (on step 4 it runs
 | `.claude/skills/<id>/`, `.agents/skills/<id>/` | Skill copies for agents set to copy placement | Ignore (regenerated) |
 | `harness.toml`, `harness.lock.json` | Shared settings and resolved imports | Track |
 | `.harness/state.json`, `.harness/backups/` | Local applied state and backups | Ignore |
+| `.harness/local.toml` | Optional gateway token (owner-only permissions on Unix) | Ignore |
 | `.output/` (configurable) | Temporary local output, not shared; never read back as input | Ignore |
 | `.gitignore` | A managed block with the ignore rules above; your other rules are kept | Track |
 
@@ -63,11 +64,23 @@ The tool changes existing files only inside managed blocks that start with `agen
 
 - **Local folder.** Use a folder inside the project, for example `vendor/skills`. Each subfolder that contains a `SKILL.md` is a skill. Bundled files are copied but never executed. Symlinks that point outside the package are refused. A folder outside the project can't be saved in shared settings, so copy those skills into the project first.
 - **Wiki gateway (`md.zerotymer.net`).** The tool reads the gateway `https://md-gw.zerotymer.net` with `GET /api/v2/documents/<uuid>` (gateway API v2).
-  - **Token (optional):** enter the *name* of the environment variable that may hold your token. The default is `GATEWAY_TOKEN`. If the variable is unset, the tool reads without a token; reads currently need none. If the gateway answers 401/403, set the variable. The token value itself is never written to files, screens or logs.
+  - **Token (optional):** reads currently need no token. You can type one in the token row; it is never drawn on screen, and after a successful apply it is saved to `.harness/local.toml`, which Git ignores. A token in the environment variable named in the token variable row (default `GATEWAY_TOKEN`) wins over the typed or saved token. If the gateway answers 401/403, give a token. The token never appears in tracked files, screens or error messages.
   - **Type:** optional Wiki.js path prefix such as `skill` or `claude/hook`.
   - **Fetching:** enter a page UUID and press [조회] (fetch). The network is used only at that moment. The request times out after 15 seconds, and the screen does not update until the response arrives.
   - **Content:** English and Korean pages become `SKILL.md` and `SKILL_ko.md`, unchanged. If one language is missing, you must accept a partial import. The tool never creates a missing translation.
-  - **Catalog:** the gateway has no catalog API yet, so [목록 불러오기] (load list) shows fixed sample entries marked "(더미)" (dummy).
+  - **Catalog:** [목록 불러오기] (load list) shows the wiki catalog. Picking an entry fills in its UUID, type and skill name. Archived entries and entries whose `target` is not `skill` are listed but cannot be imported.
+
+## Catalogs
+
+Three local JSON files list what you can pick: `wiki.json` (Wiki.js pages), `skills.json` (public skills) and `docs.json` (documents). Their format is in [`references/HARNESS_CATALOG_CONTRACT.md`](../references/HARNESS_CATALOG_CONTRACT.md). The tool never downloads a catalog; whoever distributes the tool also distributes the files.
+
+Each catalog is looked up in this order, and the first one found is used:
+
+1. The path in `AGENT_HARNESS_WIKI_CATALOG`, `AGENT_HARNESS_SKILLS_CATALOG` or `AGENT_HARNESS_DOCS_CATALOG`. A relative path is taken from the project root.
+2. `catalog/<kind>.json` next to the executable.
+3. The sample built into the executable (this repository's `catalog/`).
+
+A file with an unknown key, the wrong `kind`, an unsupported `schema_version` or a duplicate `id` is rejected with an error, and the tool does not fall back to another catalog. [카탈로그 보기] (view catalogs) on the skills step shows each catalog's origin, `catalog_version` and per-entry state: available, imported, archived, conflict (the `.skills/<id>/` folder already exists), or list only. Public skills and documents are list only for now.
 
 ## Running again
 

@@ -1,8 +1,8 @@
 # 0020 — 카탈로그 읽기, 위키 카탈로그 가져오기, 문서 목록
 
 > Entity UUID: 01a1f814-b504-73a6-9188-93a8b6a94c8e   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입, 예: `feature/catalog-wiki-docs/01a1f814`)
+> Status: IN_PROGRESS
+> Branch: `feature/catalog-wiki-docs/01a1f814`
 > 근거: `references/STEP_2_CATALOG_INTEGRATION*.md` §1·§2·§4·§5, `references/HARNESS_CATALOG_CONTRACT*.md`
 
 ## 목표

@@ -4,7 +4,7 @@
 
 ## 현재 상태
 
-1단계 구현을 마쳤고 사용자가 인수했습니다(2026-11-20, `docs/STAGE1_REPORT_ko.md` 참고). 2단계는 카탈로그 연동으로 범위를 다시 정하는 중입니다(지시서 0019). 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 Rust TUI(Ratatui + Crossterm)의 명세(SDD)와, 이를 구현하는 Rust 크레이트 `agent-harness-tui`가 들어 있습니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
+1단계 구현을 마쳤고 사용자가 인수했습니다(2026-11-20, `docs/STAGE1_REPORT_ko.md` 참고). 2단계는 카탈로그 연동이며, 이전 2단계 기능은 3단계로 옮겼습니다(지시서 0019). 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 Rust TUI(Ratatui + Crossterm)의 명세(SDD)와, 이를 구현하는 Rust 크레이트 `agent-harness-tui`가 들어 있습니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
 
 - 빌드: `cargo build`
 - 테스트: `cargo test` (테스트는 임시 디렉터리에 대상 프로젝트를 만들어 검증합니다)
@@ -17,13 +17,14 @@
 - `README.md` / `README_ko.md`: 목적, 설계 결정, 구현 전에 다시 확인해야 할 공식 출처.
 - `references/STEP_1_INITIAL_CREATION*.md`: 1단계, 초기 하네스 생성.
 - `docs/USAGE*.md`: 설치와 사용. `docs/STAGE1_REPORT*.md`: 1단계 검증 보고.
-- `references/STEP_2_ADDITIONAL_FEATURES*.md`: 2단계, 범위가 정해진 업데이터, 오버라이드 계층, 모드, 훅, Git worktree/Worktrunk/Docktree 지원.
+- `references/STEP_2_CATALOG_INTEGRATION*.md`: 2단계, Wiki.js 페이지·공개 스킬(`npx skills add`)·문서의 로컬 JSON 카탈로그. `references/HARNESS_CATALOG_CONTRACT*.md`: 카탈로그 형식.
+- `references/STEP_3_ADDITIONAL_FEATURES*.md`: 3단계, 범위가 정해진 업데이터, 오버라이드 계층, 모드, 훅, Git worktree/Worktrunk/Docktree 지원.
 
 명세가 기준입니다. 가져온 스킬이 명세나 다른 스킬과 충돌하면, 필요한 경우 사용자에게 확인한 뒤 명세(두 언어 모두)나 `.skills/`의 로컬 스킬 사본을 고칩니다. 로컬 스킬을 고쳤다면 그 스킬의 `source.json`에 있는 `localChanges`에 기록합니다. 위키 원문은 절대 수정하지 않습니다. 원문이 바뀌면 사용자가 알려주며, 다시 가져올 때는 로컬 수정을 다시 적용해야 합니다.
 
 ## 이 리포지토리의 작업 규칙
 
-- **단계 순서:** 1단계가 인수 조건을 통과하기 전에는 2단계 작업을 시작하지 않습니다. 1단계에는 worktree/서비스 관리, 런타임 훅 실행, 범용 업데이터, 그리고 사용자가 제공한 `agent.db` 스키마(이슈 #21) 외의 SQLite 스키마가 들어가면 안 됩니다. 다만 2단계 업데이터가 쓸 상태는 1단계에서 저장해 두어야 합니다.
+- **단계 순서:** 각 단계가 인수 조건을 통과해야 다음 단계를 시작합니다(1단계는 2026-11-20 인수). 2단계는 카탈로그만 추가합니다. worktree/서비스 관리, 런타임 훅 실행, 범용 업데이터는 3단계 범위이며, 사용자가 제공한 `agent.db` 스키마(이슈 #21) 외의 SQLite 스키마도 넣지 않습니다. TUI는 카탈로그를 내려받지 않습니다.
 - **언어:**
   - 작업 지시서는 한국어로만 작성합니다.
   - 에이전트가 참고하는 문서(참조 문서, 스킬, 이 파일 같은 지침)는 영어 `{name}.md`와 같은 내용의 한국어 `{name}_ko.md`로 짝을 이루며, 둘을 함께 수정합니다.
@@ -64,4 +65,5 @@
 
 위키 원문과 달라진 로컬 사본은 다음과 같습니다(자세한 내용은 각 `source.json`에 있음).
 - **`git-worktree-guideline`:** 브랜치 이름, `{DATETIME}` 형식, `dev`/`fix` 규칙을 `git-branch-guideline` v1.1.0에 맞췄습니다. worktree 경로 매핑 `../.worktree/{BRANCH}`는 그대로입니다.
+- **`wiki-skill-import`:** 게이트웨이 API v2를 씁니다. MCP는 `/api/v2/mcp`, REST는 `GET /api/v2/documents/<uuid>`입니다. 읽기에는 토큰이 선택 사항이고, 스크립트에서는 `User-Agent`를 명시해야 합니다.
 - **`instruction-operating-rules`:** UUID 레지스트리를 없앴으므로 UUID는 로컬에서 생성만 합니다. `git-branch-guideline`의 UUID를 바로잡고 브랜치 형식을 맞췄습니다. 세션 파일은 `.claude/session`, 명세는 `references/`, 스킬 경로는 `.skills/`를 가리킵니다.

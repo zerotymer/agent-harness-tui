@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_REPORT.md`). Stage 2 is being re-scoped to catalog integration (instruction 0019). The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
+Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_REPORT.md`). Stage 2 is catalog integration; the former Stage 2 features moved to Stage 3 (instruction 0019). The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
 
 - Build: `cargo build`
 - Test: `cargo test` (tests build target projects in temporary directories)
@@ -17,13 +17,14 @@ Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_RE
 - `README.md` / `README_ko.md`: purpose, design decisions, and official sources to re-check before implementing.
 - `references/STEP_1_INITIAL_CREATION*.md`: Stage 1, which covers initial harness creation.
 - `docs/USAGE*.md`: install and usage. `docs/STAGE1_REPORT*.md`: Stage 1 verification report.
-- `references/STEP_2_ADDITIONAL_FEATURES*.md`: Stage 2, which covers the bounded updater, override layers, modes, hooks, and Git worktree/Worktrunk/Docktree support.
+- `references/STEP_2_CATALOG_INTEGRATION*.md`: Stage 2, local JSON catalogs for Wiki.js pages, public skills (`npx skills add`) and documents. `references/HARNESS_CATALOG_CONTRACT*.md`: the catalog format.
+- `references/STEP_3_ADDITIONAL_FEATURES*.md`: Stage 3, which covers the bounded updater, override layers, modes, hooks, and Git worktree/Worktrunk/Docktree support.
 
 The spec is the source of truth. When an imported skill conflicts with the spec or with another skill, check with the user if needed, then fix the spec (both languages) or the local skill copy in `.skills/`. Record any local skill edit in that skill's `source.json` `localChanges`. Never edit the wiki originals; the user reports upstream changes, and a refresh must re-apply the local edits.
 
 ## Working rules for this repository
 
-- **Stage order:** Stage 1 must pass its acceptance criteria before any Stage 2 work starts. Stage 1 must not include worktree/service management, runtime hook execution, a general updater, or any SQLite schema other than the `agent.db` schema the user supplied (issue #21). It must still store the state that the Stage 2 updater will need.
+- **Stage order:** Each stage must pass its acceptance criteria before the next starts (Stage 1 was accepted on 2026-11-20). Stage 2 adds catalogs only: no worktree/service management, runtime hook execution or general updater (those are Stage 3), and no SQLite schema other than the `agent.db` schema the user supplied (issue #21). The TUI never downloads a catalog.
 - **Languages:**
   - Work instructions are written in Korean only.
   - Agent-facing documents (references, skills, guidance such as this file) are an English `{name}.md` plus an equivalent Korean `{name}_ko.md`, and both are edited together.
@@ -64,4 +65,5 @@ When you import a skill, add or update its row in this table and in `CLAUDE_ko.m
 
 Local copies that differ from the wiki (details in each `source.json`):
 - **`git-worktree-guideline`:** branch names, the `{DATETIME}` format, and the `dev`/`fix` rules now match `git-branch-guideline` v1.1.0. The worktree path mapping `../.worktree/{BRANCH}` is unchanged.
+- **`wiki-skill-import`:** uses gateway API v2: MCP at `/api/v2/mcp`, REST `GET /api/v2/documents/<uuid>`. A token is optional for reads, and scripts must set an explicit `User-Agent`.
 - **`instruction-operating-rules`:** the UUID registry is removed, so UUIDs are only generated locally. The `git-branch-guideline` UUID is corrected and branch formats are aligned. Session files go in `.claude/session`, specs live in `references/`, and skill paths point to `.skills/`.

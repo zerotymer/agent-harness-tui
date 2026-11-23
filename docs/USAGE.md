@@ -2,7 +2,7 @@
 
 `agent-harness-tui` is a terminal wizard that sets up an agent harness in the project you run it from. It creates instruction folders, agent guidance (`AGENTS.md`, `CLAUDE.md` and their `_ko.md` pairs), shared skills under `.skills/`, and a `.gitignore` block. Every change is previewed first and written only when you confirm.
 
-This document covers Stage 1, initial creation. Updating an existing harness is Stage 2 and is not available yet.
+This document covers Stage 1, initial creation. Catalogs are Stage 2 and updating an existing harness is Stage 3; neither is available yet.
 
 ## Install
 
@@ -71,7 +71,7 @@ The tool changes existing files only inside managed blocks that start with `agen
 
 ## Running again
 
-When `harness.toml` exists, the tool shows a summary and checks whether the files still match the settings. It never applies changes in this mode. Adding or updating skills is a Stage 2 feature. Running the same initialization again never duplicates blocks, skills or ignore rules.
+When `harness.toml` exists, the tool shows a summary and checks whether the files still match the settings. It never applies changes in this mode. Adding or updating skills comes in a later stage. Running the same initialization again never duplicates blocks, skills or ignore rules.
 
 ## Recovery
 

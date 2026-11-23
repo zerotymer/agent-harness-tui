@@ -1,8 +1,8 @@
-# Step 2: Additional Harness Features
+# Step 3: Additional Harness Features
 
 ## Prerequisite and objective
 
-Start only after [Step 1](STEP_1_INITIAL_CREATION.md) passes its acceptance criteria in the application repository. Extend that standalone TUI with bounded updates, configuration overrides, modes, hooks and optional Git worktree integrations. Keep Stage 1 initialization usable without these optional tools.
+Start only after [Step 1](STEP_1_INITIAL_CREATION.md) and [Step 2](STEP_2_CATALOG_INTEGRATION.md) pass their acceptance criteria in the application repository. This content was Stage 2 until 2026-11-20, when Stage 2 was re-scoped to catalog integration. Extend that standalone TUI with bounded updates, configuration overrides, modes, hooks and optional Git worktree integrations. Keep Stage 1 initialization usable without these optional tools.
 
 This instruction does not authorize building external backend services, a scheduler, a central backlog service, or a general container administration product.
 
@@ -104,7 +104,7 @@ Document the following optional systems and integration seams. Do not build or d
 
 | Candidate | Intended role |
 | --- | --- |
-| `md.zerotymer.net` or another skill/guidance source | Catalog, documents, revisions and authentication |
+| `md.zerotymer.net` or another skill/guidance source | Documents, revisions and authentication. Catalogs are the local JSON files of Stage 2 |
 | Hook/harness-template repository | Reusable profiles and platform/agent compatibility metadata |
 | Backlog/task-state system | Optional instruction linkage. The `agent.db` contract is the one in the Stage 1 spec §2 (issue #21); schema changes need a new user-supplied contract |
 | Credential facility | Keep actual tokens outside shared project files |

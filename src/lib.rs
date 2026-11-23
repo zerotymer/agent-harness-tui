@@ -8,6 +8,7 @@ pub mod contract;
 pub mod gitignore;
 pub mod guidance;
 pub mod init;
+pub mod install;
 pub mod local;
 pub mod paths;
 pub mod placement;

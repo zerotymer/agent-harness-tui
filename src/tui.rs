@@ -13,6 +13,7 @@ use crate::contract::{
     SourceKind, WIKI_GATEWAY_URL,
 };
 use crate::init::{self, Loaded, PendingImport, Prepared};
+use crate::install::{self, Conflict, NPX, RunRequest};
 use crate::local::{self, Secret};
 use crate::paths::{HiddenAttr, Layout, ProjectRoot, RelPath};
 use crate::placement::{Method, agent_name, methods, skills_dir};
@@ -32,8 +33,11 @@ pub enum Step {
     Skills,
     Preview,
     Done,
-    /// Read-only view of the three catalogs, opened from the skills step.
+    /// View of the three catalogs, opened from the skills step. Public
+    /// skill entries can be selected for install.
     Catalog,
+    /// Confirmation screen for one public skill install.
+    Install,
 }
 
 const STEPS: [(Step, &str); 6] = [
@@ -98,6 +102,14 @@ pub struct App {
     result: Option<Result<(crate::apply::ApplyReport, HiddenAttr), String>>,
     /// Outcome of saving the typed token after a successful apply.
     token_saved: Option<Result<(), String>>,
+    /// `npx` found on `PATH`, if any.
+    pub npx: Option<std::path::PathBuf>,
+    /// Index of the skills catalog entry on the install screen.
+    install_pick: usize,
+    /// Confirmed install waiting for the terminal handover (see `take_run`).
+    run_request: Option<RunRequest>,
+    /// Exit code of the last install, or why it could not run.
+    install_result: Option<Result<Option<i32>, String>>,
 }
 
 impl App {
@@ -139,6 +151,10 @@ impl App {
             prepared: None,
             result: None,
             token_saved: None,
+            npx: install::find_program(NPX, std::env::var_os("PATH")),
+            install_pick: 0,
+            run_request: None,
+            install_result: None,
         };
         // Already initialized: summary and a read-only verification only.
         if let Ok(Loaded {
@@ -200,6 +216,7 @@ impl App {
             Step::Paths => 4,
             Step::Agents => 4,
             Step::Skills => SK_FIXED_ROWS + self.catalog.len(),
+            Step::Catalog => self.catalogs.skills.as_ref().map_or(0, |c| c.entries.len()),
             _ => 0,
         }
     }
@@ -285,6 +302,10 @@ impl App {
                 self.focus = SK_CATALOGS;
                 Step::Skills
             }
+            Step::Install => {
+                self.focus = self.install_pick;
+                Step::Catalog
+            }
         };
     }
 
@@ -325,8 +346,72 @@ impl App {
             },
             Step::Preview => self.apply(),
             Step::Done => self.quit = true,
+            Step::Catalog if self.rows() > 0 => {
+                self.install_pick = self.focus;
+                self.install_result = None;
+                self.go(Step::Install);
+            }
             Step::Catalog => self.back(),
+            Step::Install => self.confirm_install(),
         }
+    }
+
+    /// Skill names the harness deployed (lock) or selected in this session.
+    fn harness_skill_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.imports.iter().map(|i| i.skill_id.clone()).collect();
+        if let Ok(l) = &self.loaded {
+            names.extend(l.lock.skills.iter().map(|s| s.id.clone()));
+        }
+        names
+    }
+
+    fn install_entry(&self) -> Option<&crate::catalog::SkillsEntry> {
+        self.catalogs
+            .skills
+            .as_ref()
+            .ok()?
+            .entries
+            .get(self.install_pick)
+    }
+
+    fn install_conflict(&self, e: &crate::catalog::SkillsEntry) -> Conflict {
+        let names = self.harness_skill_names();
+        install::conflict(e, names.iter().map(String::as_str))
+    }
+
+    /// Queues the install; nothing runs without this explicit confirmation.
+    fn confirm_install(&mut self) {
+        let Some(e) = self.install_entry() else {
+            return;
+        };
+        let Some(args) = install::args(e) else {
+            self.message =
+                Some("이 항목은 TUI가 실행하지 않습니다. 안내된 명령을 직접 실행하세요.".into());
+            return;
+        };
+        if let Conflict::With(name) = self.install_conflict(e) {
+            self.message = Some(format!(
+                "하네스 스킬 `{name}`과 이름이 겹쳐 설치하지 않습니다."
+            ));
+            return;
+        }
+        let Some(program) = self.npx.clone() else {
+            self.message = Some(format!("`{NPX}`를 찾을 수 없어 설치할 수 없습니다."));
+            return;
+        };
+        self.run_request = Some(RunRequest { program, args });
+        self.message = None;
+    }
+
+    /// The confirmed install, for the caller to run with the terminal
+    /// handed over (`install::run_interactive`).
+    pub fn take_run(&mut self) -> Option<RunRequest> {
+        self.run_request.take()
+    }
+
+    /// Records the outcome of a run returned by `take_run`.
+    pub fn finish_run(&mut self, result: Result<Option<i32>, String>) {
+        self.install_result = Some(result);
     }
 
     // --------------------------------------------------------- actions
@@ -683,7 +768,7 @@ impl App {
     /// Sidebar position; the catalog view belongs to the skills step.
     fn step_index(&self) -> usize {
         let shown = match self.step {
-            Step::Catalog => Step::Skills,
+            Step::Catalog | Step::Install => Step::Skills,
             s => s,
         };
         STEPS.iter().position(|(s, _)| *s == shown).unwrap_or(0)
@@ -716,7 +801,11 @@ impl App {
             Step::Skills => {
                 "↑↓ 이동  Space 선택  Enter 버튼 실행·다음  Esc 이전  Ctrl+C 취소".into()
             }
-            Step::Catalog => "↑↓ PgUp PgDn 스크롤  Enter·Esc 돌아가기  q 종료".into(),
+            Step::Catalog if self.rows() > 0 => {
+                "↑↓ 공개 스킬 선택  PgUp PgDn 스크롤  Enter 설치 확인 화면  Esc 돌아가기".into()
+            }
+            Step::Catalog => "PgUp PgDn 스크롤  Enter·Esc 돌아가기  q 종료".into(),
+            Step::Install => "Enter 확인·실행  Esc 돌아가기  q 종료".into(),
             _ => "↑↓ 이동  Space 선택  Enter 다음  Esc 이전  Ctrl+C 취소".into(),
         }
     }
@@ -731,6 +820,7 @@ impl App {
             Step::Preview => self.preview_lines(),
             Step::Done => self.result_lines(),
             Step::Catalog => self.catalog_lines(),
+            Step::Install => self.install_lines(),
         };
         if let Some(m) = &self.message {
             lines.push(Line::raw(""));
@@ -741,6 +831,8 @@ impl App {
         }
         let title = if self.step == Step::Catalog {
             format!(" {}. {} ─ 카탈로그 ", i + 1, STEPS[i].1)
+        } else if self.step == Step::Install {
+            format!(" {}. {} ─ 공개 스킬 설치 ", i + 1, STEPS[i].1)
         } else {
             format!(" {}. {} ", i + 1, STEPS[i].1)
         };
@@ -1137,17 +1229,29 @@ impl App {
         v.push(Line::raw(""));
         v.push(catalog_head("공개 스킬", &c.skills));
         if let Ok(s) = &c.skills {
-            for e in &s.entries {
-                v.push(Line::raw(format!(
-                    "  [목록만] {}  {}  ← {} {}",
-                    e.id,
-                    e.title.display(),
-                    e.installer,
-                    e.source
-                )));
+            for (i, e) in s.entries.iter().enumerate() {
+                let state = if e.installer != SKILLS_CLI {
+                    "직접 설치"
+                } else if self.npx.is_none() {
+                    "사용 불가"
+                } else if matches!(self.install_conflict(e), Conflict::With(_)) {
+                    "충돌"
+                } else {
+                    "설치 가능"
+                };
+                v.push(self.row(
+                    i,
+                    format!(
+                        "[{state}] {}  {}  ← {} {}",
+                        e.id,
+                        e.title.display(),
+                        e.installer,
+                        e.source
+                    ),
+                ));
                 if e.installer == SKILLS_CLI {
                     let skill = e.skill.as_deref().unwrap_or("*");
-                    v.push(Line::raw(format!("      스킬: {skill} (설치는 이후 단계)")));
+                    v.push(Line::raw(format!("      스킬: {skill}")));
                 } else if let Some(cmd) = &e.install {
                     v.push(Line::raw(format!("      직접 실행: {cmd}")));
                 }
@@ -1165,6 +1269,85 @@ impl App {
                 )));
                 v.push(Line::raw(format!("      {}", e.url)));
             }
+        }
+        v
+    }
+}
+
+impl App {
+    fn install_lines(&self) -> Vec<Line<'static>> {
+        let Some(e) = self.install_entry() else {
+            return vec![Line::raw("선택한 항목이 없습니다.")];
+        };
+        let mut v = vec![
+            Line::styled(
+                format!("{}  {}", e.id, e.title.display()),
+                Style::new().add_modifier(Modifier::BOLD),
+            ),
+            Line::raw(format!("출처: {}", e.source)),
+        ];
+        if let Some(s) = &e.summary {
+            v.push(Line::raw(format!("설명: {}", s.display())));
+        }
+        if let Some(ver) = &e.version {
+            v.push(Line::raw(format!("버전(표시용): {ver}")));
+        }
+        v.push(Line::raw(""));
+        let Some(args) = install::args(e) else {
+            v.push(Line::raw(format!(
+                "설치 도구 `{}` 항목은 TUI가 실행하지 않습니다. 직접 실행하세요:",
+                e.installer
+            )));
+            v.push(Line::raw(format!(
+                "  {}",
+                e.install.clone().unwrap_or_default()
+            )));
+            return v;
+        };
+        let program = self.npx.clone().unwrap_or_else(|| NPX.into());
+        v.push(Line::raw("실행할 명령 (셸 없이, 프로젝트 루트에서):"));
+        v.push(Line::raw(format!(
+            "  {}",
+            RunRequest { program, args }.display()
+        )));
+        v.push(Line::raw(""));
+        let mut ready = true;
+        if self.npx.is_none() {
+            ready = false;
+            v.push(Line::raw(format!(
+                "사용 불가: PATH에서 `{NPX}`를 찾을 수 없습니다."
+            )));
+        }
+        match self.install_conflict(e) {
+            Conflict::None => v.push(Line::raw("이름 충돌: 없음")),
+            Conflict::With(name) => {
+                ready = false;
+                v.push(Line::raw(format!(
+                    "이름 충돌: 하네스 스킬 `{name}`과 같은 이름이라 설치하지 않습니다."
+                )));
+            }
+            Conflict::Unknown => v.push(Line::raw(
+                "경고: 모든 스킬을 설치하므로 이름 충돌 검사를 할 수 없습니다 (사용 불가). 하네스 스킬과 이름이 겹치면 CLI가 덮어쓸 수 있습니다.",
+            )),
+        }
+        v.push(Line::raw(""));
+        if ready {
+            v.push(Line::raw(
+                "Enter를 누르면 TUI 화면을 잠시 닫고 터미널을 skills CLI에 넘깁니다.",
+            ));
+            v.push(Line::raw(
+                "대상 에이전트, project·user 범위, 스킬 선택은 CLI가 직접 묻습니다.",
+            ));
+            v.push(Line::raw(
+                "설치 위치와 파일은 skills CLI가 관리하며, 하네스는 소유하지 않습니다.",
+            ));
+        }
+        match &self.install_result {
+            Some(Ok(Some(0))) => v.push(Line::raw("결과: 설치 성공 (종료 코드 0)")),
+            Some(Ok(Some(code))) => v.push(Line::raw(format!("결과: 실패 (종료 코드 {code})"))),
+            Some(Ok(None)) => v.push(Line::raw("결과: 실패 (신호로 종료됨)")),
+            Some(Err(err)) => v.push(Line::raw(format!("결과: 실행하지 못함 ({err})"))),
+            None => {}
         }
         v
     }
@@ -1692,6 +1875,116 @@ mod tests {
         assert_eq!(app.step, Step::Skills);
         assert_eq!(app.focus, SK_CATALOGS);
         assert_eq!(files_in(&p.0), 0, "viewing catalogs writes nothing");
+    }
+
+    fn to_install(app: &mut App, i: usize) {
+        for _ in 0..3 {
+            key(app, KeyCode::Enter);
+        }
+        app.focus = SK_CATALOGS;
+        key(app, KeyCode::Enter);
+        assert_eq!(app.step, Step::Catalog);
+        app.focus = i;
+        key(app, KeyCode::Enter);
+        assert_eq!(app.step, Step::Install);
+    }
+
+    #[test]
+    fn install_runs_only_after_confirmation_and_reports_exit_code() {
+        let p = TempProject::new();
+        let mut app = p.app();
+        app.npx = Some(PathBuf::from("/opt/node/bin").join(NPX));
+        to_install(&mut app, 0); // built-in `anthropic-pdf`
+        assert_eq!(app.take_run(), None, "opening the screen runs nothing");
+        let text = screen(&app, 160, 40);
+        let cmd = format!(
+            "{NPX} skills add anthropics/skills@e4bb5d960d87126ff3b3a8af1a104b7db67560ba -s pdf"
+        );
+        assert!(text.contains(&cmd), "{text}");
+        assert!(text.contains("이름 충돌: 없음"));
+        key(&mut app, KeyCode::Enter); // confirm
+        let req = app.take_run().expect("queued after confirmation");
+        assert_eq!(
+            req.args,
+            [
+                "skills",
+                "add",
+                "anthropics/skills@e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+                "-s",
+                "pdf"
+            ]
+        );
+        assert_eq!(app.take_run(), None, "runs once");
+        app.finish_run(Ok(Some(3)));
+        assert!(screen(&app, 160, 40).contains("실패 (종료 코드 3)"));
+        app.finish_run(Ok(Some(0)));
+        assert!(screen(&app, 160, 40).contains("설치 성공"));
+        key(&mut app, KeyCode::Esc);
+        assert_eq!((app.step, app.focus), (Step::Catalog, 0));
+        assert_eq!(files_in(&p.0), 0, "the TUI itself wrote nothing");
+    }
+
+    #[test]
+    fn install_is_blocked_without_npx_on_conflict_and_for_other_installers() {
+        let p = TempProject::new();
+        let mut app = p.app();
+        app.npx = None;
+        to_install(&mut app, 0);
+        assert!(screen(&app, 160, 40).contains("사용 불가"));
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.take_run(), None);
+
+        let mut app = p.app();
+        app.npx = Some(PathBuf::from(NPX));
+        app.imports.push(PendingImport {
+            skill_id: "PDF".into(),
+            source_id: "local".into(),
+            reference: "pdf".into(),
+            page_type: None,
+            accept_partial: false,
+            package: Package::default(),
+        });
+        to_install(&mut app, 0);
+        assert!(screen(&app, 160, 40).contains("하네스 스킬 `PDF`"));
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.take_run(), None, "name conflict blocks the run");
+
+        // `claude-code-cli` entry: text only.
+        let mut app = p.app();
+        app.npx = Some(PathBuf::from(NPX));
+        to_install(&mut app, 2);
+        assert!(screen(&app, 160, 40).contains("claude plugin marketplace add"));
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(app.take_run(), None);
+    }
+
+    #[test]
+    fn installing_every_skill_warns_that_the_check_is_unavailable() {
+        let p = TempProject::new();
+        let mut app = p.app();
+        app.npx = Some(PathBuf::from(NPX));
+        let parsed = crate::catalog::parse::<crate::catalog::SkillsEntry>(
+            r#"{"schema_version":1,"kind":"skills","entries":[
+              {"id":"all","installer":"skills-cli","source":"owner/repo","title":{"en":"All"}}]}"#,
+        )
+        .unwrap();
+        app.catalogs.skills = Ok(Catalog {
+            origin: Origin::Builtin,
+            catalog_version: None,
+            entries: parsed.entries,
+        });
+        to_install(&mut app, 0);
+        let text = screen(&app, 160, 40);
+        assert!(text.contains("이름 충돌 검사를 할 수 없습니다"), "{text}");
+        assert!(
+            text.contains(&format!("{NPX} skills add owner/repo\n"))
+                || text.contains(&format!("{NPX} skills add owner/repo "))
+        );
+        key(&mut app, KeyCode::Enter);
+        assert_eq!(
+            app.take_run().unwrap().args,
+            ["skills", "add", "owner/repo"]
+        );
     }
 
     #[test]

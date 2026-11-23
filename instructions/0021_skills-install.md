@@ -1,8 +1,8 @@
 # 0021 — 공개 스킬 설치 (`npx skills add`)
 
 > Entity UUID: 01a1f814-b504-7198-9613-f289ac469b4d   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입, 예: `feature/skills-install/01a1f814`)
+> Status: IN_PROGRESS
+> Branch: `feature/skills-install/01a1f814`
 > 근거: `references/STEP_2_CATALOG_INTEGRATION*.md` §3, `references/HARNESS_CATALOG_CONTRACT*.md` `skills` 항목
 
 ## 목표
@@ -14,7 +14,7 @@ skills 카탈로그 항목을 사용자가 확인하면 공식 CLI `npx skills a
 ## 범위
 - 포함:
   - 인자 배열 생성: `npx skills add <source> [-s <skill>]`. `skill`이 없거나 `*`이면 `-s` 생략. `-a`, `-g`, `-y`는 붙이지 않는다(에이전트·범위·스킬 선택은 CLI가 사용자에게 묻는다)
-  - 이름 충돌 검사: 확인 전에 `npx skills add <source> -l`로 스킬 이름 목록을 받아 하네스가 배포한 스킬과 비교. 겹치면 충돌로 표시하고 실행하지 않음. `-l` 출력 형식은 공식 문서로 확인하고, 이름을 확실히 읽을 수 없으면 검사를 사용 불가로 표시
+  - 이름 충돌 검사: `skill`이 있으면 하네스가 배포·선택한 스킬과 바로 비교해 겹치면 실행하지 않음. 전체 설치는 검사 사용 불가로 표시하고 경고. `-l` 출력은 쓰지 않는다(2026-11-23 사용자 결정: 문서화되지 않은 장식 출력)
   - 확인 화면: 명령 전체를 보여 주고, 사용자가 확인한 경우에만 실행
   - 터미널 넘기기: raw 모드·대체 화면 해제 → stdin·stdout·stderr를 상속해 CLI 실행 → 종료 후 Enter 대기 → 화면 복원과 종료 코드 표시. 0이 아닌 종료 코드는 실패
   - 셸 없이 실행. 작업 디렉터리는 프로젝트 루트이고, Windows에서는 `npx.cmd`. 스크립트 파일은 만들지 않는다
@@ -29,7 +29,7 @@ skills 카탈로그 항목을 사용자가 확인하면 공식 CLI `npx skills a
 - 확인 없이는 실행하지 않음
 - 대체 실행 파일로 성공·실패 종료 코드 보고
 - `npx`가 없을 때 사용 불가로 표시
-- 이름 충돌 시 실행 차단 (`-l` 출력은 대체 실행 파일로 흉내)
+- 이름 충돌 시 실행 차단, 전체 설치는 검사 사용 불가 경고
 - 옵션처럼 보이는 값(`-`로 시작)이 카탈로그 검증 단계에서 거부되는지
 
 ## 완료 기준 (DoD)

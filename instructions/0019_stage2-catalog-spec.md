@@ -1,8 +1,8 @@
 # 0019 — 2단계 명세 재작성: 카탈로그 연동 (나머지는 3단계로 이관)
 
 > Entity UUID: 01a1f80c-e91d-7346-8e86-a6cc73d252b3   (로컬 생성, UUIDv7)
-> Status: TODO
-> Branch: (작업 시작 시 기입, 예: `feature/stage2-catalog-spec/01a1f80c`)
+> Status: IN_PROGRESS
+> Branch: `feature/stage2-catalog-spec/01a1f80c`
 > 근거: 사용자와 2단계 범위 논의 및 결정 (2026-11-17 ~ 2026-11-20)
 
 ## 목표

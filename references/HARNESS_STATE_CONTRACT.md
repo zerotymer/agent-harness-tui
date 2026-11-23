@@ -12,7 +12,7 @@ Schema version: **1**. Implemented in `src/contract.rs` (instruction 0003). It c
 
 ## Common rules
 
-- Every file has an integer `schema_version`. The version is read **before** any other field. A missing version is a parse error. Any version other than 1 is reported as unsupported, and the file is left unchanged. Stage 1 has no migration; Stage 2 adds migration with backups.
+- Every file has an integer `schema_version`. The version is read **before** any other field. A missing version is a parse error. Any version other than 1 is reported as unsupported, and the file is left unchanged. Stage 1 has no migration; Stage 3 adds migration with backups.
 - Unknown keys are rejected in every table. This is how transient data (ports, service allocations) and stray secrets are kept out of shared files.
 - Every path is a project-relative `RelPath`: `/`-separated, normalized, never absolute, never escaping the root. Windows drive paths and `..` escapes are rejected when the file is parsed. Symlinks are checked against the real filesystem when paths are resolved (instruction 0002).
 - IDs (`source`, `skill`, apply `id`) are slugs: `[A-Za-z0-9._-]+`, not starting with `.` or `-`. IDs are compared case-insensitively for duplicates.
@@ -132,15 +132,15 @@ A managed block is the lines between a begin and an end marker with the same ID.
 - Any line containing `agent-harness:` that is not an exact marker is a conflict. So are duplicate IDs, nested blocks, a missing end, an end without a begin, and an end whose ID does not match. The file is never rewritten as a whole to repair markers.
 - A block body may not contain `agent-harness:` text.
 
-## Stage 2 coverage
+## Stage 3 coverage
 
-The Stage 2 spec §8 asks for state items. Stage 1 records them as follows:
+The Stage 3 spec §8 (the former Stage 2 spec) asks for state items. Stage 1 records them as follows:
 
-| Stage 2 item | Stage 1 field |
+| Stage 3 item | Stage 1 field |
 | --- | --- |
 | Stable IDs | source/skill `id` |
 | Source revisions | lock `ref`, `files[].revision`, `files[].hash` |
-| Enablement | presence in `harness.toml` (explicit disable comes with Stage 2) |
+| Enablement | presence in `harness.toml` (explicit disable comes with Stage 3) |
 | Managed files/blocks | state `managed` |
 | Baseline hashes | state `managed[].hash`, `deployments[].hash` |
 | Copy/reference mappings | state `deployments` |

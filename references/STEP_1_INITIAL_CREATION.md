@@ -2,6 +2,8 @@
 
 ## Objective and boundary
 
+> 2026-11-24: the implementation moves to Node.js (TypeScript + Ink, instruction 0025). The Rust, Ratatui and Crossterm wording below records how Stage 1 was built and accepted; the rules themselves still apply.
+
 Create a standalone Rust TUI for initial project harness configuration. Run it from the target project root. Use Ratatui and Crossterm, with Linux servers as the primary environment and native Windows and macOS support.
 
 Implement this instruction in this repository. Preserve existing user files. Do not add worktree management, Worktrunk, Docktree, runtime modes, executable hooks, service management, or a general harness updater in this stage. Store the state needed by the Stage 3 updater now.
@@ -24,7 +26,7 @@ Implement this instruction in this repository. Preserve existing user files. Do 
 | Canonical skills | `.skills/` | Default fixed in Stage 1 | Track |
 | Optional backlog | `instructions/agent.db` | Enable/disable only; follows instruction root | Ignore (the `agent-db.sh`/`agent-db.ps1` scripts are tracked) |
 
-An output-directory override must retain a dot-prefixed directory name. Windows hidden attributes are a separate platform concern; a leading dot alone does not set that attribute. Explain and report any inability to apply the selected hidden attribute.
+Stage 1 required a dot-prefixed output directory name. The [Stage 2 spec](STEP_2_SETUP_FLOW.md) §4 removes that rule (issue #36): every path is user-defined, and the output directory becomes the artifacts directory. Windows hidden attributes are a separate platform concern; a leading dot alone does not set that attribute. Explain and report any inability to apply the selected hidden attribute.
 
 ## 2. Instruction workflow to generate
 

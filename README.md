@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Build a standalone Rust TUI that configures an agent harness from the current project root. The tool manages instruction, reference, output, and skill paths and generates project-wide agent guidance.
+Build a standalone Node.js TUI that configures an agent harness from the current project root. The tool manages instruction, reference, output, and skill paths and generates project-wide agent guidance.
 
 These documents are the implementation instructions for this repository. The application is implemented here, in stage order. Do not initialize Git or register services.
 
@@ -12,14 +12,14 @@ These documents are the implementation instructions for this repository. The app
 | --- | --- | --- | --- |
 | 1 | [STEP_1_INITIAL_CREATION.md](references/STEP_1_INITIAL_CREATION.md) | [STEP_1_INITIAL_CREATION_ko.md](references/STEP_1_INITIAL_CREATION_ko.md) | Standalone TUI, initial generation, remote skills, configuration and baseline state |
 | 1 | [docs/USAGE.md](docs/USAGE.md), [docs/STAGE1_REPORT.md](docs/STAGE1_REPORT.md) | [docs/USAGE_ko.md](docs/USAGE_ko.md), [docs/STAGE1_REPORT_ko.md](docs/STAGE1_REPORT_ko.md) | Install and usage; verification report |
-| 2 | [STEP_2_CATALOG_INTEGRATION.md](references/STEP_2_CATALOG_INTEGRATION.md), [HARNESS_CATALOG_CONTRACT.md](references/HARNESS_CATALOG_CONTRACT.md) | [STEP_2_CATALOG_INTEGRATION_ko.md](references/STEP_2_CATALOG_INTEGRATION_ko.md), [HARNESS_CATALOG_CONTRACT_ko.md](references/HARNESS_CATALOG_CONTRACT_ko.md) | Local JSON catalogs for Wiki.js pages, public skills and documents |
-| 3 | [STEP_3_ADDITIONAL_FEATURES.md](references/STEP_3_ADDITIONAL_FEATURES.md) | [STEP_3_ADDITIONAL_FEATURES_ko.md](references/STEP_3_ADDITIONAL_FEATURES_ko.md) | Bounded updates, overrides, modes, hooks, Git worktree, Worktrunk and Docktree |
+| 2 | [STEP_2_SETUP_FLOW.md](references/STEP_2_SETUP_FLOW.md), [HARNESS_CATALOG_CONTRACT.md](references/HARNESS_CATALOG_CONTRACT.md) | [STEP_2_SETUP_FLOW_ko.md](references/STEP_2_SETUP_FLOW_ko.md), [HARNESS_CATALOG_CONTRACT_ko.md](references/HARNESS_CATALOG_CONTRACT_ko.md) | Setup flow: agents, paths, guidance, installs from `project.json`, content-service client |
+| 3 | [STEP_3_ADDITIONAL_FEATURES.md](references/STEP_3_ADDITIONAL_FEATURES.md) | [STEP_3_ADDITIONAL_FEATURES_ko.md](references/STEP_3_ADDITIONAL_FEATURES_ko.md) | Bounded updates, overrides, modes, Git worktree, Worktrunk and Docktree |
 
 Complete and validate each stage before starting the next. Worktrunk belongs to Stage 3 because it manages Git worktrees; it is not a prerequisite for initial harness creation.
 
 ## Decisions
 
-- Implementation: Rust, Ratatui and Crossterm. Linux servers are the primary environment; provide native Windows and macOS support.
+- Implementation: TypeScript and Ink 8 on Node.js 22 or later (2026-11-24; Stage 1 was built in Rust with Ratatui and Crossterm and is ported by instruction 0025). Agents and skills install through npm, so Node.js is the whole environment. Linux servers are the primary environment; Windows and macOS are supported.
 - The current working directory is the project root. Stage 1 must not redirect execution to a parent repository or primary worktree.
 - Track pending and completed instructions, instruction history, references, skills and shared harness configuration in the target project's Git repository.
 - Keep generated outputs, optional SQLite backlog data, credentials and machine-local state outside Git.
@@ -31,7 +31,11 @@ Complete and validate each stage before starting the next. Worktrunk belongs to 
 
 The following official sources informed the plan on 2026-11-15. Recheck supported versions and integration contracts at implementation time; do not copy legacy event names or configuration examples without verification.
 
-- [Ratatui backends](https://ratatui.rs/concepts/backends/comparison/)
+- [Ink](https://github.com/vadimdemedes/ink)
+  - Checked 2026-11-24 (Context7, npm registry): Ink 8.0.0 needs Node.js `>=22` and React `>=19.3.0`. `useApp().suspendTerminal()` hands the terminal to a child process and restores it, which the install handover uses. Tests use `ink-testing-library`.
+- [Node.js child processes](https://nodejs.org/api/child_process.html)
+  - Checked 2026-11-24: on Windows, `.cmd` and `.bat` files cannot run without `cmd.exe`, and `spawn` with `shell: true` is deprecated (DEP0190). `spawn` has a `timeout` option.
+- History (Stage 1, Rust): [Ratatui backends](https://ratatui.rs/concepts/backends/comparison/)
 - [Crossterm](https://github.com/crossterm-rs/crossterm)
   - Checked 2026-11-16 (Context7, docs.rs): Ratatui 0.30.x uses the `crossterm` backend by default (crossterm 0.29.x, feature `crossterm_0_29`) and re-exports it as `ratatui::crossterm`, so the crate depends on `ratatui` only. Toolchain: Rust 1.97.1, edition 2024.
 - [Project AGENTS.md guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md)

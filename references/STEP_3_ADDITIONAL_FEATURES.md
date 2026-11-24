@@ -2,7 +2,7 @@
 
 ## Prerequisite and objective
 
-Start only after [Step 1](STEP_1_INITIAL_CREATION.md) and [Step 2](STEP_2_CATALOG_INTEGRATION.md) pass their acceptance criteria in the application repository. This content was Stage 2 until 2026-11-20, when Stage 2 was re-scoped to catalog integration. Extend that standalone TUI with bounded updates, configuration overrides, modes, hooks and optional Git worktree integrations. Keep Stage 1 initialization usable without these optional tools.
+Start only after [Step 1](STEP_1_INITIAL_CREATION.md) and [Step 2](STEP_2_SETUP_FLOW.md) pass their acceptance criteria in the application repository. This content was Stage 2 until 2026-11-20, when Stage 2 was re-scoped. On 2026-11-24 executable hooks moved out of this stage (§4). Extend that standalone TUI with bounded updates, configuration overrides, modes and optional Git worktree integrations. Keep Stage 1 initialization usable without these optional tools.
 
 This instruction does not authorize building external backend services, a scheduler, a central backlog service, or a general container administration product.
 
@@ -11,7 +11,6 @@ This instruction does not authorize building external backend services, a schedu
 Allow these mutations only:
 
 - Add, remove, or explicitly refresh selected skills and their managed agent-specific deployments.
-- Add, modify, disable, or remove managed hooks.
 - Enable or disable supported integration profiles and mode profiles.
 - Regenerate the affected managed guidance blocks and compatible configuration/state metadata.
 
@@ -50,7 +49,9 @@ State exactly whether a profile applies guidance only or also configures support
 
 Switch modes through supported session mechanisms or provide explicit instructions when a restart is needed. Do not claim a running agent has reloaded a changed file without verifying that behavior. Do not add model selection, billing policies or autonomous task orchestration in this stage.
 
-## 4. Hook architecture
+## 4. Hook architecture (design boundary, not implemented in Stage 3)
+
+Stage 2 lists hooks as reference entries only. Executable hooks are not built in Stage 3; a later instruction must enable them. This section stays as the design boundary for that work.
 
 Separate harness lifecycle hooks from agent runtime hooks and worktree/container lifecycle hooks.
 
@@ -77,14 +78,14 @@ Implement worktree-aware identity and state before adding the Worktrunk adapter.
 
 - Keep the current worktree root as the effective project root. Discover shared repository identity separately through Git; do not assume `.git` is a directory.
 - Keep managed relative paths unchanged inside each worktree. Instructions, references and canonical skills follow that worktree's checkout, not one globally writable copy.
-- Keep `.output/`, `.harness/` and optional `agent.db` separate per worktree by default. Do not automatically share or copy SQLite files, credentials or transient state.
+- Keep the artifacts path, `.harness/` and optional `agent.db` separate per worktree by default. Do not automatically share or copy SQLite files, credentials or transient state.
 - A new worktree without local applied state must bootstrap ownership checks from its tracked configuration/lock data. Do not assume untracked pending instructions will be copied.
 - Preserve append-only instruction events with unique event IDs. Detect log/sequence conflicts when branches are merged; never claim a global sequence or silently rewrite history. Keep Git merges explicit rather than introducing a central log service.
 - Detect Worktrunk availability and supported version. Default its integration to disabled; installation alone does not enable it.
 - Generate only supported project-scoped settings (currently documented at `.config/wt.toml`) and managed workflow guidance/skills. Preserve existing settings and show native hook accumulation effects.
 - Project settings must not silently modify user-home configuration or shell startup files. Inform users about required shell integration or dependencies separately.
 - Make worktree creation/switch/removal integration actions explicit. Do not automatically merge, delete branches or remove a worktree when changing a profile.
-- Validate Windows support against the current Worktrunk contract, including Git Bash dependencies and executable-name conflicts. Do not claim that a native Rust TUI makes external hook runtimes cross-platform automatically.
+- Validate Windows support against the current Worktrunk contract, including Git Bash dependencies and executable-name conflicts. Do not claim that a TUI running on several OSes makes external hook runtimes cross-platform automatically.
 
 ## 6. Optional Docktree integration
 
@@ -104,7 +105,7 @@ Document the following optional systems and integration seams. Do not build or d
 
 | Candidate | Intended role |
 | --- | --- |
-| `md.zerotymer.net` or another skill/guidance source | Documents, revisions and authentication. Catalogs are the local JSON files of Stage 2 |
+| `md.zerotymer.net` or another skill/guidance source | Documents, revisions and authentication. The project configuration is the local `project.json` / `default.json` of Stage 2 |
 | Hook/harness-template repository | Reusable profiles and platform/agent compatibility metadata |
 | Backlog/task-state system | Optional instruction linkage. The `agent.db` contract is the one in the Stage 1 spec §2 (issue #21); schema changes need a new user-supplied contract |
 | Credential facility | Keep actual tokens outside shared project files |
@@ -124,10 +125,9 @@ Configuring an integration does not prove that its external runtime is healthy. 
 ## 9. Acceptance criteria
 
 - All Stage 1 acceptance criteria continue to pass without Worktrunk, Docktree or Docker installed.
-- Skills and hooks can be added/removed/updated within the declared boundary; user edits survive conflict detection and cancelled updates.
+- Skills can be added/removed/updated within the declared boundary; user edits survive conflict detection and cancelled updates.
 - Override precedence is deterministic, allowed keys are enforced, and each effective setting has visible provenance.
 - Missing local state, metadata migration and interrupted updates do not authorize destructive overwrites or false success records.
-- Tests verify hook argument handling, timeout/failure policy, duplicate execution prevention and no execution during remote import.
 - Two worktrees have independent output, database and applied state; relative paths resolve within the current worktree.
 - Verify plain Git-worktree operation, Worktrunk-only, Docktree-only and combined profiles where their prerequisites are available. Clearly mark integrations not exercised against real supported tools.
 - Disabling integrations deletes no worktree or runtime resources. Root paths and user documents are unchanged by updates.

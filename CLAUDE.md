@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_REPORT.md`). The stages after Stage 1 are being redefined around the flow redesign in `instructions/0022_flow-redesign.md` (2026-11-23): Stage 2 becomes that flow (agents, paths, guidance, catalogs), Stage 3 keeps the remaining extras. The content service for dynamic skills and references is a separate program; this repository implements only its client. The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
+Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_REPORT.md`). The stages after Stage 1 are being redefined around the flow redesign in `instructions/0022_flow-redesign.md` (2026-11-23): Stage 2 becomes that flow (agents, paths, guidance, catalogs), Stage 3 keeps the remaining extras. The content service for dynamic skills and references is a separate program; this repository implements only its client. The repo holds the spec (SDD) for a standalone TUI that sets up an agent harness, plus its implementation `agent-harness-tui`.
+
+**Platform change (2026-11-24):** the implementation moves from Rust (Ratatui + Crossterm) to Node.js: TypeScript + Ink 8 on Node.js 22 or later, developed with pnpm, tested with the built-in `node:test`, and released as an `npm pack` tarball on GitHub Releases (install with `npm install -g <tarball URL>`; no npm registry publishing for now). Agents and skills are installed through npm, so Node.js is the whole environment. Instruction 0025 ports Stage 1 to Node with its acceptance tests and then removes the Rust crate in the same PR; 0023 and 0024 are implemented on Node after it. Until 0025 is done, the Rust commands below still apply. The repo itself also follows a layout similar to what the harness manages.
+
+Current (Rust, until 0025):
 
 - Build: `cargo build`
 - Test: `cargo test` (tests build target projects in temporary directories)
@@ -13,6 +17,12 @@ Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_RE
 - Toolchain: pinned in `rust-toolchain.toml` (Rust 1.97.1 with rustfmt and clippy).
 - CI: `.github/workflows/ci.yml` runs clippy, tests and a release build on Linux, Windows and macOS (fmt on Linux) for pull requests and pushes to `main`, and uploads the binaries as workflow artifacts. Actions are official `actions/*` only, pinned to commit SHAs.
 - Release: pushing a `v*` tag that matches the `Cargo.toml` version (for example `git tag v0.1.0 && git push origin v0.1.0`) runs `.github/workflows/release.yml`, which tests and builds on the three OSes and publishes the binaries with `SHA256SUMS` as a GitHub Release. Only its publish job gets `contents: write`.
+
+Target (Node, from 0025; exact scripts are set by 0025):
+
+- Install: `pnpm install`. Build: `pnpm build` (TypeScript to JavaScript; Node 22 cannot run TypeScript directly). Test: `pnpm test` (`node:test`). Lint and type check: `pnpm lint`.
+- `package.json` sets `"engines": { "node": ">=22" }`, matching Ink 8 and the Claude Code npm package.
+- CI and release keep the same shape: three OSes, official `actions/*` pinned to SHAs, release on a `v*` tag matching the `package.json` version, `contents: write` only for publishing.
 
 - `README.md` / `README_ko.md`: purpose, design decisions, and official sources to re-check before implementing.
 - `references/STEP_1_INITIAL_CREATION*.md`: Stage 1, which covers initial harness creation.

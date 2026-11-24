@@ -14,6 +14,9 @@ importers:
       react:
         specifier: ^19.3.1
         version: 19.3.1
+      smol-toml:
+        specifier: ^1.9.1
+        version: 1.9.1
     devDependencies:
       '@biomejs/biome':
         specifier: 2.6.8
@@ -369,6 +372,10 @@ packages:
     resolution: {integrity: sha512-CJKEH3zwVX4bOnE+bFbmh+JK/YMT9VAazqBsVBTesnYKXlNtz6oVmrhNp1jHrxHzscuUkWiKZpzNzFraZcrorg==}
     engines: {node: '>=22'}
 
+  smol-toml@1.9.1:
+    resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
+    engines: {node: '>= 18'}
+
   stack-utils@2.0.6:
     resolution: {integrity: sha512-XlkWvfIm6RmsWtNJx+uqtKLS8eqFbxUg0ZzLXqY0caEy9l7hruX8IpiDnjsLavoBgqCCR71TqWO8MaXYheJ3RQ==}
     engines: {node: '>=10'}
@@ -642,6 +649,8 @@ snapshots:
     dependencies:
       ansi-styles: 7.0.0
       string-width: 8.3.0
+
+  smol-toml@1.9.1: {}
 
   stack-utils@2.0.6:
     dependencies:

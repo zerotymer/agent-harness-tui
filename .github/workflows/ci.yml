@@ -1,6 +1,7 @@
 # CI for agent-harness-tui (instruction 0012).
 # Official actions only, pinned to commit SHAs (tag in the trailing comment).
 # The Rust toolchain comes from rust-toolchain.toml via the runner's rustup.
+# The node job checks the Node.js port (instruction 0025).
 name: CI
 
 on:
@@ -68,3 +69,35 @@ jobs:
             target/release/agent-harness-tui.exe
           if-no-files-found: error
           retention-days: 14
+
+  # Node.js port (instruction 0025). Runs next to the Rust job until U7
+  # removes the crate. pnpm comes from package.json "packageManager" via
+  # Corepack, so no third-party setup action is needed.
+  node:
+    name: node-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: pnpm
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Lint
+        # Formatting is checked on Linux only, as with cargo fmt.
+        if: runner.os == 'Linux'
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test

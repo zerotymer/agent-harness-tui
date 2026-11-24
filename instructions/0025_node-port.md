@@ -1,7 +1,7 @@
 # 0025 — 구현 플랫폼 전환: Rust → Node.js(TypeScript + Ink)
 
 > Entity UUID: 01a20b75-cbb5-73b9-9f00-8377607348bd   (로컬 생성, UUIDv7)
-> Status: TODO
+> Status: IN_PROGRESS
 > Branch: `feature/node-port/01a20b75`
 > 근거: 2026-11-24 사용자 결정, 상위 지시서 `0022_flow-redesign.md`
 > 순서: 0023·0024보다 먼저 한다. 0023·0024는 이 지시서가 끝난 뒤 Node로 구현한다.
@@ -27,6 +27,14 @@
   - 같은 PR에서 삭제: `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `src/*.rs`, `tests/*.rs`. `.gitignore`의 `target/`을 `node_modules/`, `dist/`로 바꾼다
   - 문서 영/한: `CLAUDE*.md` 명령 절(“현재/목표” 구분 제거), `docs/USAGE*.md`. `docs/STAGE1_REPORT*.md`는 이력으로 두고 맨 위에 전환 안내 한 줄
 - 제외: 0023·0024의 새 기능(에이전트 화면, 카탈로그 v2, 경로 재정의). 동작은 1단계 그대로 옮긴다
+
+## 추가 결정 (2026-11-24)
+- 단위: U1 뼈대 → U2 경로·계약 → U3 적용 엔진(`apply`·`blocks`·`backlog`) → U4 생성물(`placement`·`guidance`·`gitignore`·`local`) → U5 가져오기·실행(`sources`·`catalog`·`install`) → U6 화면·통합(`init`·`tui`·`main`, 인수 테스트) → U7 Rust 삭제·CI·릴리스·문서. PR 하나에 단위별 커밋
+- SQLite: 내장 `node:sqlite`(U3에서 공식 문서로 확인)
+- 0020 카탈로그 v1은 항목 검증만 옮긴다. 환경변수·실행 파일 옆 위치와 위키 카탈로그 가져오기는 옮기지 않는다(0023에서 삭제 예정)
+- 린트·포맷: Biome + `tsc --noEmit`
+- pnpm은 `packageManager` 필드와 Corepack으로 고정한다(CI는 공식 `actions/*`만 쓰므로)
+- 미비한 부분은 추후 작업으로 남긴다
 
 ## 확인 필요 (구현 전)
 - ~~Windows의 `.cmd` 실행~~ → 결정(2026-11-24): Node는 `.cmd`·`.bat`을 `cmd.exe` 없이 실행하지 못하고 `shell: true`는 폐기 예정(DEP0190)이다. 찾은 프로그램이 `.cmd`·`.bat`일 때만 `cmd.exe /d /s /c <파일> <인자>`로 실행하고, 모든 인자에 공백과 `& | < > ^ % ! " ( )`가 없는지 먼저 검사해 걸리면 거부한다. `shell` 옵션은 쓰지 않는다. 이 검사의 단위 테스트(모든 OS에서 실행)를 둔다

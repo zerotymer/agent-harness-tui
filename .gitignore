@@ -25,3 +25,7 @@ agent.db-journal
 
 # Rust build output
 /target/
+
+# Node build output and dependencies
+/node_modules/
+/dist/

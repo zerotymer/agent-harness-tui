@@ -29,7 +29,7 @@ Out of scope: worktree and service management, executable hooks, the general har
 - **Install commands are the user's responsibility.** The TUI shows every argument vector from the configuration and runs it only after the user confirms. It runs it without a shell. It never runs a command string.
 - The configuration holds no secrets. Tokens are only named by environment variable.
 - CI parses the built-in `default.json` with the same validation code the TUI uses.
-- **Runtime:** the TUI runs on Node.js 22 or later (TypeScript + Ink, 2026-11-24). Agent installs and skill installs use npm and npx from the same Node.js installation.
+- **Runtime:** the TUI runs on Node.js 22.13 or later (TypeScript + Ink, 2026-11-24; 22.13 for the built-in `node:sqlite`). Agent installs and skill installs use npm and npx from the same Node.js installation.
 
 ## 2. Flow
 

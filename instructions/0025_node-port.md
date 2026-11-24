@@ -14,11 +14,11 @@
 2. 전환: 이식 먼저, 1단계와 동등해지면 같은 PR에서 Rust 삭제
 3. 도구: pnpm, 테스트는 내장 `node:test`(화면은 `ink-testing-library`)
 4. 배포: GitHub Release에 `npm pack` 타르볼과 `SHA256SUMS`. 설치는 `npm install -g <URL>`. npm 레지스트리 공개는 나중에 정한다
-5. Node 최소 버전 22 (`engines`)
+5. Node 최소 버전 22 (`engines`). 2026-11-24 22.13으로 올림(아래 추가 결정)
 
 ## 범위
 - 포함:
-  - `package.json`(`engines.node >=22`, `bin: agent-harness-tui`), `tsconfig.json`, `pnpm-lock.yaml`. 스크립트 `build`·`test`·`lint`
+  - `package.json`(`engines.node >=22.13`, `bin: agent-harness-tui`), `tsconfig.json`, `pnpm-lock.yaml`. 스크립트 `build`·`test`·`lint`
   - 1단계 기능 이식: 경로 검사(`RelPath`, 이탈·심볼릭 링크·중복·중첩), 관리 블록, `.gitignore` 블록, 지침 생성, 계약 파일(`harness.toml`·`harness.lock.json`·`state.json`, 모르는 키 거부), 적용 엔진(백업, `apply.lock`, 모든 쓰기 성공 후 기록), 백로그 스크립트, 위키 게이트웨이 가져오기, 스킬 배치(copy/reference), 0021 skills 설치
   - 화면: Ink. 터미널 넘기기는 `useApp().suspendTerminal()`
   - 인수 테스트 이식: `tests/stage1.rs`의 11개를 `node:test`로. 단위 테스트는 동작 단위로 옮긴다(개수 맞추기는 목표가 아님)
@@ -30,7 +30,7 @@
 
 ## 추가 결정 (2026-11-24)
 - 단위: U1 뼈대 → U2 경로·계약 → U3 적용 엔진(`apply`·`blocks`·`backlog`) → U4 생성물(`placement`·`guidance`·`gitignore`·`local`) → U5 가져오기·실행(`sources`·`catalog`·`install`) → U6 화면·통합(`init`·`tui`·`main`, 인수 테스트) → U7 Rust 삭제·CI·릴리스·문서. PR 하나에 단위별 커밋
-- SQLite: 내장 `node:sqlite`(U3에서 공식 문서로 확인)
+- SQLite: 내장 `node:sqlite`(U3에서 공식 문서로 확인). 22.5.0에 추가됐지만 22.13.0 전에는 `--experimental-sqlite` 플래그가 필요하므로 `engines.node`를 `>=22.13`으로 올린다(2026-11-24 사용자 승인). 22.13 이후에도 불러올 때 실험 기능 경고가 한 번 나오므로 백로그를 켤 때만 불러온다
 - 0020 카탈로그 v1은 항목 검증만 옮긴다. 환경변수·실행 파일 옆 위치와 위키 카탈로그 가져오기는 옮기지 않는다(0023에서 삭제 예정)
 - 린트·포맷: Biome + `tsc --noEmit`
 - pnpm은 `packageManager` 필드와 Corepack으로 고정한다(CI는 공식 `actions/*`만 쓰므로)

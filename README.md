@@ -19,7 +19,7 @@ Complete and validate each stage before starting the next. Worktrunk belongs to 
 
 ## Decisions
 
-- Implementation: TypeScript and Ink 8 on Node.js 22 or later (2026-11-24; Stage 1 was built in Rust with Ratatui and Crossterm and is ported by instruction 0025). Agents and skills install through npm, so Node.js is the whole environment. Linux servers are the primary environment; Windows and macOS are supported.
+- Implementation: TypeScript and Ink 8 on Node.js 22.13 or later (22.13 for the built-in `node:sqlite` without a flag; 2026-11-24; Stage 1 was built in Rust with Ratatui and Crossterm and is ported by instruction 0025). Agents and skills install through npm, so Node.js is the whole environment. Linux servers are the primary environment; Windows and macOS are supported.
 - The current working directory is the project root. Stage 1 must not redirect execution to a parent repository or primary worktree.
 - Track pending and completed instructions, instruction history, references, skills and shared harness configuration in the target project's Git repository.
 - Keep generated outputs, optional SQLite backlog data, credentials and machine-local state outside Git.

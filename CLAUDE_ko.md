@@ -6,7 +6,7 @@
 
 1단계 구현을 마쳤고 사용자가 인수했습니다(2026-11-20, `docs/STAGE1_REPORT_ko.md` 참고). 1단계 이후 단계는 `instructions/0022_flow-redesign.md`의 플로우 재설계(2026-11-23)를 기준으로 다시 정의하는 중입니다. 2단계는 이 플로우(에이전트, 경로, 지침, 카탈로그)가 되고, 3단계는 나머지 추가 기능을 유지합니다. 동적 스킬과 동적 참조 문서를 제공하는 콘텐츠 서비스는 별도 프로그램이며, 이 리포지토리는 그 클라이언트만 구현합니다. 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 TUI의 명세(SDD)와 그 구현 `agent-harness-tui`가 들어 있습니다.
 
-**플랫폼 변경(2026-11-24):** 구현을 Rust(Ratatui + Crossterm)에서 Node.js로 옮깁니다. Node.js 22 이상에서 TypeScript + Ink 8을 쓰고, pnpm으로 개발하며, 내장 `node:test`로 테스트하고, GitHub Release에 `npm pack` 타르볼로 배포합니다(`npm install -g <타르볼 URL>`로 설치, 지금은 npm 레지스트리에 공개하지 않음). 에이전트와 스킬을 npm으로 설치하므로 환경 전체를 Node.js로 통일합니다. 지시서 0025가 1단계를 인수 테스트와 함께 Node로 이식하고, 같은 PR에서 Rust 크레이트를 지웁니다. 0023과 0024는 그 뒤에 Node로 구현합니다. 0025를 마칠 때까지는 아래 Rust 명령이 그대로 유효합니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
+**플랫폼 변경(2026-11-24):** 구현을 Rust(Ratatui + Crossterm)에서 Node.js로 옮깁니다. Node.js 22.13 이상에서 TypeScript + Ink 8을 쓰고, pnpm으로 개발하며, 내장 `node:test`로 테스트하고, GitHub Release에 `npm pack` 타르볼로 배포합니다(`npm install -g <타르볼 URL>`로 설치, 지금은 npm 레지스트리에 공개하지 않음). 에이전트와 스킬을 npm으로 설치하므로 환경 전체를 Node.js로 통일합니다. 지시서 0025가 1단계를 인수 테스트와 함께 Node로 이식하고, 같은 PR에서 Rust 크레이트를 지웁니다. 0023과 0024는 그 뒤에 Node로 구현합니다. 0025를 마칠 때까지는 아래 Rust 명령이 그대로 유효합니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
 
 현재(Rust, 0025 전까지):
 
@@ -21,7 +21,7 @@
 목표(Node, 0025부터. 정확한 스크립트는 0025에서 정합니다):
 
 - 설치: `pnpm install`. 빌드: `pnpm build`(TypeScript를 JavaScript로. Node 22는 TypeScript를 직접 실행하지 못합니다). 테스트: `pnpm test`(`node:test`). 린트·타입 검사: `pnpm lint`.
-- `package.json`에 `"engines": { "node": ">=22" }`를 둡니다. Ink 8과 Claude Code npm 패키지의 요구 버전과 같습니다.
+- `package.json`에 `"engines": { "node": ">=22.13" }`를 둡니다. Ink 8과 Claude Code npm 패키지는 22가 필요하고, 내장 `node:sqlite`는 22.13부터 플래그 없이 동작합니다.
 - CI와 릴리스는 같은 형태를 유지합니다. 세 OS, SHA로 고정한 공식 `actions/*`, `package.json` 버전과 같은 `v*` 태그로 릴리스, `contents: write`는 게시 작업에만.
 
 - `README.md` / `README_ko.md`: 목적, 설계 결정, 구현 전에 다시 확인해야 할 공식 출처.

@@ -19,6 +19,7 @@ import {
   type Placement,
 } from "./contract.js";
 import type { GitReport } from "./gitignore.js";
+import { groupByGuidance, guidanceFiles } from "./guidance.js";
 import * as init from "./init.js";
 import * as install from "./install.js";
 import { LOCAL_FILE, loadToken, Secret, saveToken } from "./local.js";
@@ -172,6 +173,10 @@ export class Wizard {
    * and agents come from `harness.toml` and cannot change.
    */
   adding = false;
+  /** The preview came from [지침 갱신]; Esc returns to the check. */
+  refreshing = false;
+  /** The read-only check of an initialized project, restored when additions are left. */
+  private checked: Wizard["prepared"];
   localSourceId = "local";
   wikiSourceId = "wiki";
   fetched: Package | undefined;
@@ -232,7 +237,9 @@ export class Wizard {
       const config = w.loaded.ok ? w.loaded.value.config : undefined;
       if (w.loaded.ok && config && w.project.ok) {
         const agents = w.project.value.config.agents;
-        w.prepared = await settle(init.prepare(root, w.loaded.value, config, [], agents));
+        const hooks = w.hookEntries();
+        w.prepared = await settle(init.prepare(root, w.loaded.value, config, [], agents, hooks));
+        w.checked = w.prepared;
       }
     }
     return w;
@@ -320,7 +327,7 @@ export class Wizard {
       case "agents":
         return this.agents.length * 2 + 2;
       case "verify":
-        return this.canAdd() ? 2 : 0;
+        return this.canAdd() ? (this.guidanceStale() ? 3 : 2) : 0;
       case "skills":
         return SK_FIXED_ROWS + this.catalog.length;
       case "catalog":
@@ -420,6 +427,10 @@ export class Wizard {
         return;
       case "preview":
         this.prepared = undefined;
+        if (this.refreshing) {
+          this.stopAdding();
+          return;
+        }
         this.step = "skills";
         return;
       case "catalog":
@@ -445,7 +456,8 @@ export class Wizard {
       case "verify":
         if (!this.canAdd()) this.quit = true;
         else if (this.focus === 0) this.startAdding("skills");
-        else this.startAdding("hooks");
+        else if (this.focus === 1) this.startAdding("hooks");
+        else return this.refreshGuidance();
         return;
       case "hooks":
         this.back();
@@ -841,8 +853,32 @@ export class Wizard {
     if (first === "hooks") this.go("hooks");
   }
 
+  /** Guidance blocks the check would rewrite (rendered text differs, no conflict). */
+  guidanceStale(): boolean {
+    const p = this.prepared;
+    const config = this.loaded.ok ? this.loaded.value.config : undefined;
+    if (!this.canAdd() || !p?.ok || !config) return false;
+    const files = groupByGuidance(config, this.agentEntries()).flatMap((g) =>
+      g[0] ? guidanceFiles(g[0]).map(([, f]) => f.toString()) : [],
+    );
+    return p.value.plan.items.some(
+      (i) =>
+        (i.action.kind === "create" || i.action.kind === "update") &&
+        files.includes(i.desired.path.toString()),
+    );
+  }
+
+  /** Rewrites the managed blocks only; the preview shows every change first. */
+  private async refreshGuidance() {
+    this.startAdding("skills");
+    this.refreshing = true;
+    await this.openPreview();
+  }
+
   private stopAdding() {
     this.adding = false;
+    this.refreshing = false;
+    this.prepared = this.checked;
     this.imports = [];
     this.localLocked = undefined;
     this.hooks = [];
@@ -1002,8 +1038,8 @@ export class Wizard {
     }
     const { config: c, state, lock } = this.loaded.value;
     if (!c) return v;
-    v.push(raw("이미 초기화된 프로젝트입니다. 요약과 무변경 검증만 제공합니다."));
-    v.push(raw("변경(스킬 추가·갱신 등)은 2단계 업데이트 기능에서 다룹니다."));
+    v.push(raw("이미 초기화된 프로젝트입니다. 요약과 무변경 검증을 보여 줍니다."));
+    v.push(raw("경로·에이전트는 바꾸지 않습니다. 스킬·훅 추가와 지침 갱신만 할 수 있습니다."));
     v.push(raw(""));
     const shown = (p: RelPath | undefined) => (p ? `${p}/` : "사용 안 함");
     v.push(raw(`지시서: ${c.paths.instructions}/   임시 산출물: ${shown(c.paths.artifacts)}`));
@@ -1052,6 +1088,13 @@ export class Wizard {
       v.push(raw(""), raw("추가 작업 (기존 내용은 바꾸지 않고 더하기만 합니다):"));
       v.push(this.row(0, "[스킬 추가] 로컬 폴더·위키·공개 스킬"));
       v.push(this.row(1, "[훅 추가] 참고 항목 기록과 안내"));
+      if (this.guidanceStale()) {
+        v.push(
+          raw(""),
+          raw("지침 블록이 현재 구성으로 만든 내용과 다릅니다. 블록 밖 사용자 글은 그대로 둡니다."),
+        );
+        v.push(this.row(2, "[지침 갱신] 관리 블록 다시 쓰기 (미리보기 후 적용)"));
+      }
     }
     return v;
   }

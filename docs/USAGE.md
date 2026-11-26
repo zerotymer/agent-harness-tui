@@ -35,7 +35,7 @@ agent-harness-tui
 - Every screen shows a header with the project root and the configuration in use (`project.json`, or the built-in `default.json`, with its `catalog_version`).
 - It needs an interactive terminal on both stdin and stdout. Otherwise it exits immediately with code 2 instead of waiting.
 - `agent-harness-tui --version` prints the version, and `--help` prints usage.
-- An already initialized project (with `harness.toml`) shows a summary and a no-change check, and offers only adding skills and hooks (see "Running again").
+- An already initialized project (with `harness.toml`) shows a summary and a no-change check, and offers only adding skills and hooks and refreshing stale guidance (see "Running again").
 
 ## The five steps
 
@@ -121,12 +121,13 @@ Checked with skills CLI 1.9.0 (2026-11-23): `npx skills add anthropics/skills@<c
 
 A `harness.toml` written with schema 1 (with `output`) is still read: `output` becomes `artifacts` with the same value, so an existing `.output/` stays in use. It is rewritten as schema 2 by the next apply, for example when you add a skill or a hook.
 
-When `harness.toml` exists, the tool shows a summary and checks whether the files still match the settings. Paths and agents cannot change here. If the check finds no conflict, two buttons are offered:
+When `harness.toml` exists, the tool shows a summary and checks whether the files still match the settings. Paths and agents cannot change here. If the check finds no conflict, these buttons are offered:
 
 - **[스킬 추가] (add skills)** opens the sources and skills screen with the recorded paths and agents: a local folder, a wiki skill (the list button shows `wiki_skills` from the configuration; archived and already imported ones are blocked) or a public skill. Esc returns to the check.
 - **[훅 추가] (add hooks)** lists the configuration's `hooks`. The picked IDs are recorded in `harness.toml`, and the guidance gets a "Hooks (reference)" section that tells you to add the hooks you use to the agent's own settings and adjust them there. Nothing is installed or run.
+- **[지침 갱신] (refresh guidance)** appears only when a guidance block differs from what the current configuration renders, for example after a newer version of this tool or after `project.json` renamed a hook. It rewrites the managed blocks after the preview; your text outside the blocks is kept. Esc on the preview returns to the check without writing. A block you edited yourself is a conflict, and then no button is offered.
 
-Both go through the preview and apply as usual and only add; skills already installed cannot be added again, and updating or removing skills comes later. Running the same initialization again never duplicates blocks, skills or ignore rules.
+All of them go through the preview and apply as usual and only add; skills already installed cannot be added again, and updating or removing skills comes later. Running the same initialization again never duplicates blocks, skills or ignore rules.
 
 ## Recovery
 

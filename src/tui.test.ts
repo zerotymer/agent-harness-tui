@@ -17,7 +17,8 @@ const SK_REF = 4;
 const SK_ADD = 8;
 const SK_LIST = 9;
 const SK_CATALOGS = 10;
-const SK_FIXED_ROWS = 11;
+const SK_HOOKS = 11;
+const SK_FIXED_ROWS = 12;
 
 /** A directory with stub executables, used as `PATH`. */
 function stubBin(names: string[]): string {
@@ -343,7 +344,7 @@ test("wiki import through a mock gateway saves the token", async () => {
     await typed(w, " "); // switch to wiki
     w.focus = SK_LIST;
     await press(w, "enter");
-    assert.match(w.message ?? "", /직접 입력/, "no wiki catalog list");
+    assert.equal(w.catalog.length, 5, "wiki skills of the configuration");
     w.focus = SK_TOKEN;
     await typed(w, TOKEN);
     assert.ok(!screen(w).includes(TOKEN));
@@ -476,9 +477,175 @@ test("initialized project is summary and verify only", async () => {
   const again = await p.wizard();
   assert.match(screen(again), /이미 초기화된 프로젝트/);
   assert.match(screen(again), /변경할 항목이 없습니다/);
-  await press(again, "enter");
+  await press(again, "esc");
   assert.ok(again.quit, "no re-init path");
   assert.equal(again.step, "verify");
+});
+
+/** An initialized project, opened again on the check screen. */
+async function initialized(p: ReturnType<typeof project>) {
+  const w = await p.wizard();
+  await press(w, "enter", 4);
+  assert.equal(w.step, "done");
+  const again = await p.wizard();
+  assert.equal(again.step, "verify");
+  return again;
+}
+
+const snapshot = (p: ReturnType<typeof project>, files: string[]) =>
+  Object.fromEntries(files.map((f) => [f, fs.existsSync(p.abs(f)) ? p.read(f) : undefined]));
+
+test("initialized project: add a skill, only additions are applied", async () => {
+  using p = project();
+  fs.mkdirSync(p.abs("vendor/review"), { recursive: true });
+  fs.writeFileSync(p.abs("vendor/review/SKILL.md"), "---\nname: review\n---\n");
+  const w = await initialized(p);
+  const before = snapshot(p, [
+    "CLAUDE_ko.md",
+    "instructions/completed.log",
+    "instructions/.gitkeep",
+  ]);
+  assert.match(screen(w), /\[스킬 추가\]/);
+  await press(w, "enter"); // [스킬 추가]
+  assert.equal(w.step, "skills");
+  assert.ok(w.adding);
+  await press(w, "down");
+  await typed(w, "vendor");
+  w.focus = SK_LIST;
+  await press(w, "enter");
+  w.focus = SK_FIXED_ROWS;
+  await press(w, "enter"); // pick
+  await press(w, "enter"); // fetch
+  w.focus = SK_ADD;
+  await press(w, "enter");
+  w.focus = SK_KIND;
+  await press(w, "enter"); // preview
+  assert.equal(w.step, "preview");
+  assert.doesNotMatch(screen(w), /CONFLICT/);
+  await press(w, "enter"); // apply
+  assert.equal(w.step, "done", screen(w));
+  assert.ok(fs.existsSync(p.abs(".skills/review/SKILL.md")));
+  assert.ok(fs.existsSync(p.abs(".claude/skills/review/SKILL.md")));
+  assert.match(p.read("harness.toml"), /id = "review"/);
+  assert.match(p.read("CLAUDE.md"), /\| review \| `\.skills\/review\/` \|/);
+  // Korean guidance gains the same table row; everything else stays.
+  const after = snapshot(p, [
+    "CLAUDE_ko.md",
+    "instructions/completed.log",
+    "instructions/.gitkeep",
+  ]);
+  assert.equal(after["instructions/completed.log"], before["instructions/completed.log"]);
+  assert.equal(after["instructions/.gitkeep"], before["instructions/.gitkeep"]);
+  assert.notEqual(after["CLAUDE_ko.md"], before["CLAUDE_ko.md"]);
+});
+
+test("initialized project: conflicts hide the additions", async () => {
+  using p = project();
+  await initialized(p);
+  fs.writeFileSync(p.abs("CLAUDE.md"), p.read("CLAUDE.md").replace("### Git", "### Git (edited)"));
+  const w = await p.wizard();
+  assert.equal(w.canAdd(), false);
+  assert.doesNotMatch(screen(w), /\[스킬 추가\]/);
+  await press(w, "enter");
+  assert.ok(w.quit);
+});
+
+test("wiki list comes from the configuration and blocks archived or imported pages", async () => {
+  using p = project();
+  const uuid = "14cea96f-f1e2-461e-b9a7-96b5a6f63b67";
+  fs.writeFileSync(
+    p.abs("project.json"),
+    JSON.stringify({
+      schema_version: 2,
+      agents: [
+        {
+          id: "claude-code",
+          title: { en: "Claude Code" },
+          detect: ["claude"],
+          guidance: "CLAUDE.md",
+          skills_dir: ".claude/skills",
+          default: true,
+        },
+      ],
+      wiki_skills: [
+        { id: "live", uuid, type: "claude/hook", title: { en: "Live" } },
+        {
+          id: "old",
+          uuid: "e03f48fb-3e00-41d7-b99d-c32854567d67",
+          type: "skill",
+          status: "archived",
+          title: { en: "Old" },
+        },
+      ],
+    }),
+  );
+  const w = await p.wizard();
+  await press(w, "enter", 2);
+  await typed(w, " "); // wiki
+  w.focus = SK_LIST;
+  await press(w, "enter");
+  w.focus = SK_FIXED_ROWS + 1;
+  await press(w, "enter");
+  assert.match(w.message ?? "", /보관된 항목/);
+  w.focus = SK_FIXED_ROWS;
+  await press(w, "enter");
+  assert.deepEqual([w.reference, w.pageType, w.skillName], [uuid, "claude/hook", "live"]);
+  w.imports.push({
+    skillId: "live",
+    sourceId: "wiki",
+    reference: uuid,
+    acceptPartial: false,
+    package: { files: [], missingLocales: [], warnings: [] },
+  });
+  w.focus = SK_LIST;
+  await press(w, "enter");
+  w.focus = SK_FIXED_ROWS;
+  await press(w, "enter");
+  assert.match(w.message ?? "", /이미 가져온 항목/);
+});
+
+test("hooks are recorded and explained, never installed", async () => {
+  using p = project();
+  const w = await initialized(p);
+  await press(w, "down"); // [훅 추가]
+  await press(w, "enter");
+  assert.equal(w.step, "hooks");
+  assert.match(screen(w), /설치하거나 실행하지 않습니다/);
+  await typed(w, " ");
+  await press(w, "enter");
+  assert.equal(w.step, "skills");
+  assert.match(screen(w), /\[훅 추가\] 참고 항목 선택 \(1개 선택\)/);
+  w.focus = SK_KIND;
+  await press(w, "enter"); // preview
+  await press(w, "enter"); // apply
+  assert.equal(w.step, "done", screen(w));
+  assert.match(p.read("harness.toml"), /\[\[hooks\]\]\nid = "claude-code-hooks"/);
+  const en = p.read("CLAUDE.md");
+  const ko = p.read("CLAUDE_ko.md");
+  assert.match(en, /### Hooks \(reference\)/);
+  assert.match(en, /Add the hooks you use to the agent's own settings yourself/);
+  assert.match(ko, /에이전트 설정에 직접 추가하고/);
+  const spans = (t: string) => new Set(t.split("`").filter((_, i) => i % 2 === 1));
+  assert.deepEqual(spans(en), spans(ko));
+  assert.ok(!fs.existsSync(p.abs(".claude/settings.json")), "nothing installed");
+
+  // A hook the configuration no longer lists is kept and shown as unknown.
+  fs.writeFileSync(p.abs("project.json"), '{"schema_version":2,"agents":[]}');
+  const again = await p.wizard();
+  assert.match(screen(again), /claude-code-hooks \(알 수 없음\)/);
+  assert.match(p.read("harness.toml"), /claude-code-hooks/);
+});
+
+test("new projects can pick hooks on the skills step too", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter", 2);
+  w.focus = SK_HOOKS;
+  await press(w, "enter");
+  assert.equal(w.step, "hooks");
+  await typed(w, " ");
+  await press(w, "esc");
+  assert.deepEqual(w.config().hooks, [{ id: "claude-code-hooks" }]);
 });
 
 test("agent IDs missing from the configuration are kept and shown as unknown", async () => {

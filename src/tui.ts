@@ -48,7 +48,9 @@ export type Step =
   /** View of the configuration lists, opened from the skills step. */
   | "catalog"
   /** Confirmation screen for one public skill install. */
-  | "install";
+  | "install"
+  /** Hook reference entries to add (instruction 0026). */
+  | "hooks";
 
 export const STEPS: [Step, string][] = [
   ["agents", "에이전트"],
@@ -81,7 +83,11 @@ const SK_PARTIAL = 7;
 const SK_ADD = 8;
 const SK_LIST = 9;
 const SK_CATALOGS = 10;
-const SK_FIXED_ROWS = 11;
+const SK_HOOKS = 11;
+const SK_FIXED_ROWS = 12;
+
+/** A list entry on the skills step; wiki entries carry their type and name. */
+type CatalogPick = CatalogEntry & { pageType?: string; name?: string; blocked?: string };
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 const attempt = <T>(f: () => T): Result<T> => {
@@ -158,7 +164,16 @@ export class Wizard {
   reference = "";
   skillName = "";
   acceptPartial = false;
-  catalog: CatalogEntry[] = [];
+  catalog: CatalogPick[] = [];
+  /** Hook IDs to record in `harness.toml`. */
+  hooks: string[] = [];
+  /**
+   * Initialized project, adding skills or hooks (instruction 0026). Paths
+   * and agents come from `harness.toml` and cannot change.
+   */
+  adding = false;
+  localSourceId = "local";
+  wikiSourceId = "wiki";
   fetched: Package | undefined;
   imports: init.PendingImport[] = [];
   /** Source fields are fixed once a skill from that source was added. */
@@ -304,10 +319,14 @@ export class Wizard {
         return 5;
       case "agents":
         return this.agents.length * 2 + 2;
+      case "verify":
+        return this.canAdd() ? 2 : 0;
       case "skills":
         return SK_FIXED_ROWS + this.catalog.length;
       case "catalog":
         return this.skillsEntries().length;
+      case "hooks":
+        return this.hookEntries().length;
       default:
         return 0;
     }
@@ -363,6 +382,12 @@ export class Wizard {
       this.fetched = undefined;
     } else if (this.step === "skills" && f === SK_PARTIAL) {
       this.acceptPartial = !this.acceptPartial;
+    } else if (this.step === "hooks") {
+      const id = this.hookEntries()[f]?.id;
+      if (id === undefined) return;
+      this.hooks = this.hooks.includes(id)
+        ? this.hooks.filter((h) => h !== id)
+        : [...this.hooks, id];
     }
   }
 
@@ -383,7 +408,15 @@ export class Wizard {
         this.step = "agents";
         return;
       case "skills":
+        if (this.adding) {
+          this.stopAdding();
+          return;
+        }
         this.step = "paths";
+        return;
+      case "hooks":
+        this.focus = SK_HOOKS;
+        this.step = "skills";
         return;
       case "preview":
         this.prepared = undefined;
@@ -410,7 +443,12 @@ export class Wizard {
   private async enter() {
     switch (this.step) {
       case "verify":
-        this.quit = true;
+        if (!this.canAdd()) this.quit = true;
+        else if (this.focus === 0) this.startAdding("skills");
+        else this.startAdding("hooks");
+        return;
+      case "hooks":
+        this.back();
         return;
       case "agents":
         if (this.focus === this.agentInstallRow()) {
@@ -440,6 +478,8 @@ export class Wizard {
             return this.loadCatalog();
           case SK_CATALOGS:
             return this.go("catalog");
+          case SK_HOOKS:
+            return this.go("hooks");
           default:
             if (this.focus >= SK_FIXED_ROWS) return this.pickCatalog(this.focus - SK_FIXED_ROWS);
             return this.openPreview();
@@ -619,8 +659,23 @@ export class Wizard {
 
   private loadCatalog() {
     if (this.wiki) {
-      // ponytail: picking from the wiki catalog is not ported (0025); 0023 replaces it.
-      this.message = "위키 소스는 목록을 불러오지 않습니다. 페이지 UUID를 직접 입력하세요.";
+      const lock = this.loaded.ok ? this.loaded.value.lock.skills : [];
+      const imported = (uuid: string) =>
+        [...lock.map((s) => s.reference), ...this.imports.map((i) => i.reference)].some(
+          (r) => r.toLowerCase() === uuid.toLowerCase(),
+        );
+      this.catalog = (this.project.ok ? this.project.value.config.wikiSkills : []).map((e) => {
+        const pick: CatalogPick = {
+          reference: e.uuid.toLowerCase(),
+          title: display(e.title),
+          pageType: e.pageType,
+          name: e.id,
+        };
+        if (e.status === "archived") pick.blocked = "보관된 항목은 가져올 수 없습니다";
+        else if (imported(e.uuid)) pick.blocked = "이미 가져온 항목입니다";
+        return pick;
+      });
+      this.message = `위키 스킬 ${this.catalog.length}개 (프로젝트 구성)`;
       return;
     }
     try {
@@ -635,8 +690,13 @@ export class Wizard {
   private pickCatalog(i: number) {
     const e = this.catalog[i];
     if (!e) return;
+    if (e.blocked) {
+      this.message = `\`${e.title}\`: ${e.blocked}.`;
+      return;
+    }
     this.reference = e.reference;
-    this.skillName = slugify(e.title);
+    if (e.pageType) this.pageType = e.pageType;
+    this.skillName = e.name ?? slugify(e.title);
     this.fetched = undefined;
     this.focus = SK_FETCH;
     this.message = `\`${e.title}\` 선택됨. [조회]로 내용을 가져오세요.`;
@@ -677,7 +737,7 @@ export class Wizard {
       this.message = `빠진 언어: ${pkg.missingLocales.join(", ")}. 부분 가져오기를 수락해야 추가할 수 있습니다.`;
       return;
     }
-    let sourceId = "wiki";
+    let sourceId = this.wikiSourceId;
     if (!this.wiki) {
       try {
         this.localLocked = this.localSource()[0];
@@ -685,7 +745,7 @@ export class Wizard {
         this.message = (e as Error).message;
         return;
       }
-      sourceId = "local";
+      sourceId = this.localSourceId;
     }
     const pageType = this.pageTypeValue();
     this.imports.push({
@@ -703,6 +763,29 @@ export class Wizard {
   }
 
   config(): HarnessConfig {
+    const base = this.loaded.ok ? this.loaded.value.config : undefined;
+    if (this.adding && base) {
+      // Additions only: the recorded config plus new skills, sources and hooks.
+      const c: HarnessConfig = {
+        ...base,
+        sources: [...base.sources],
+        skills: [...base.skills, ...this.importedSkills()],
+      };
+      const has = (id: string) => c.sources.some((s) => s.id === id);
+      if (this.localLocked && !has(this.localSourceId)) {
+        c.sources.push({ id: this.localSourceId, kind: "local-dir", path: this.localLocked });
+      }
+      if (this.imports.some((i) => i.sourceId === this.wikiSourceId) && !has(this.wikiSourceId)) {
+        c.sources.push({
+          id: this.wikiSourceId,
+          kind: "wiki-gateway",
+          tokenEnv: this.tokenEnv.trim(),
+        });
+      }
+      if (this.hooks.length > 0) c.hooks = this.hooks.map((id) => ({ id }));
+      else delete c.hooks;
+      return c;
+    }
     const layout = this.layout();
     const c = defaultConfig();
     const { backlogEnabled: _, ...paths } = layout;
@@ -717,13 +800,53 @@ export class Wizard {
     if (this.imports.some((i) => i.sourceId === "wiki")) {
       c.sources.push({ id: "wiki", kind: "wiki-gateway", tokenEnv: this.tokenEnv.trim() });
     }
-    c.skills = this.imports.map((i) => ({
+    c.skills = this.importedSkills();
+    if (this.hooks.length > 0) c.hooks = this.hooks.map((id) => ({ id }));
+    return c;
+  }
+
+  private importedSkills(): HarnessConfig["skills"] {
+    return this.imports.map((i) => ({
       id: i.skillId,
       source: i.sourceId,
       reference: i.reference,
       ...(i.pageType === undefined ? {} : { pageType: i.pageType }),
     }));
-    return c;
+  }
+
+  hookEntries(): catalog.HookEntry[] {
+    return this.project.ok ? this.project.value.config.hooks : [];
+  }
+
+  /** Additions are offered only when the check found no conflicts. */
+  canAdd(): boolean {
+    const p = this.prepared;
+    return this.initialized() && this.project.ok && !!p?.ok && conflicts(p.value.plan).length === 0;
+  }
+
+  private startAdding(first: "skills" | "hooks") {
+    const base = this.loaded.ok ? this.loaded.value.config : undefined;
+    if (!base) return;
+    this.adding = true;
+    this.imports = [];
+    this.hooks = (base.hooks ?? []).map((h) => h.id);
+    // Reuse the recorded sources so new skills share them.
+    const local = base.sources.find((s) => s.kind === "local-dir");
+    const wiki = base.sources.find((s) => s.kind === "wiki-gateway");
+    this.localSourceId = local?.id ?? "local";
+    this.localLocked = local?.path;
+    this.wikiSourceId = wiki?.id ?? "wiki";
+    if (wiki?.tokenEnv) this.tokenEnv = wiki.tokenEnv;
+    this.go("skills");
+    if (first === "hooks") this.go("hooks");
+  }
+
+  private stopAdding() {
+    this.adding = false;
+    this.imports = [];
+    this.localLocked = undefined;
+    this.hooks = [];
+    this.step = "verify";
   }
 
   private async openPreview() {
@@ -733,7 +856,14 @@ export class Wizard {
       const loaded = this.loaded.value;
       this.prepared = await settle(
         (async () =>
-          init.prepare(this.root, loaded, this.config(), this.imports, this.agentEntries()))(),
+          init.prepare(
+            this.root,
+            loaded,
+            this.config(),
+            this.imports,
+            this.agentEntries(),
+            this.hookEntries(),
+          ))(),
       );
     }
     this.go("preview");
@@ -768,7 +898,7 @@ export class Wizard {
   /** Sidebar position; the catalog views belong to the skills step. */
   stepIndex(): number {
     const shown =
-      this.step === "catalog" || this.step === "install"
+      this.step === "catalog" || this.step === "install" || this.step === "hooks"
         ? "skills"
         : this.step === "verify" || this.step === "agentInstall"
           ? "agents"
@@ -785,6 +915,7 @@ export class Wizard {
     if (this.step === "catalog") return `${base} ─ 카탈로그`;
     if (this.step === "install") return `${base} ─ 공개 스킬 설치`;
     if (this.step === "agentInstall") return `${base} ─ 설치 확인`;
+    if (this.step === "hooks") return `${base} ─ 훅 추가`;
     if (this.step === "verify") return "초기화된 프로젝트";
     return base;
   }
@@ -803,7 +934,11 @@ export class Wizard {
   keys(): string {
     switch (this.step) {
       case "verify":
-        return "↑↓ 스크롤  Enter·Esc·q 종료";
+        return this.canAdd()
+          ? "↑↓ 버튼 선택  PgUp PgDn 스크롤  Enter 실행  Esc·q 종료"
+          : "↑↓ 스크롤  Enter·Esc·q 종료";
+      case "hooks":
+        return "↑↓ 이동  Space 선택  Enter·Esc 돌아가기";
       case "agents":
         return "↑↓ 이동  Space 선택·배치 전환  Enter 버튼 실행·다음  Esc·q 종료";
       case "agentInstall":
@@ -837,6 +972,7 @@ export class Wizard {
       done: () => this.resultLines(),
       catalog: () => this.catalogLines(),
       install: () => this.installLines(),
+      hooks: () => this.hookLines(),
     }[this.step]();
     if (this.message) v.push(raw(""), { text: this.message, bold: true });
     return v;
@@ -907,6 +1043,15 @@ export class Wizard {
       }
     } else if (p) {
       v.push(raw(`검증 오류: ${p.error}`));
+    }
+    for (const h of c.hooks ?? []) {
+      const e = this.hookEntries().find((x) => x.id === h.id);
+      v.push(raw(`훅(참고): ${e ? display(e.title) : `${h.id} (알 수 없음)`}`));
+    }
+    if (this.canAdd()) {
+      v.push(raw(""), raw("추가 작업 (기존 내용은 바꾸지 않고 더하기만 합니다):"));
+      v.push(this.row(0, "[스킬 추가] 로컬 폴더·위키·공개 스킬"));
+      v.push(this.row(1, "[훅 추가] 참고 항목 기록과 안내"));
     }
     return v;
   }
@@ -1037,6 +1182,7 @@ export class Wizard {
       this.row(SK_ADD, "[추가] 선택 목록에 넣기"),
       this.row(SK_LIST, this.wiki ? "[목록 불러오기] 로컬 폴더만" : "[목록 불러오기]"),
       this.row(SK_CATALOGS, "[카탈로그 보기] 위키·스킬·문서의 출처·버전·상태"),
+      this.row(SK_HOOKS, `[훅 추가] 참고 항목 선택 (${this.hooks.length}개 선택)`),
     ];
     if (this.wiki && !this.storedToken.ok) {
       v.push(raw(`  토큰 파일 오류: ${this.storedToken.error}`));
@@ -1117,6 +1263,29 @@ export class Wizard {
     return v;
   }
 
+  private hookLines(): Line[] {
+    const v = [
+      raw(
+        "훅은 참고 항목입니다. 고른 훅을 harness.toml과 지침에 기록할 뿐, 설치하거나 실행하지 않습니다.",
+      ),
+      raw("사용하는 훅은 에이전트 설정에 직접 추가하고 조정하세요."),
+      raw(""),
+    ];
+    const entries = this.hookEntries();
+    if (entries.length === 0) v.push(raw("구성에 훅이 없습니다."));
+    entries.forEach((e, i) => {
+      const summary = e.summary ? `  ${display(e.summary)}` : "";
+      v.push(
+        this.row(i, `${check(this.hooks.includes(e.id))} ${e.id}  ${display(e.title)}${summary}`),
+      );
+      if (e.url) v.push(raw(`      ${e.url}`));
+    });
+    for (const id of this.hooks.filter((h) => !entries.some((e) => e.id === h))) {
+      v.push(raw(`  [x] ${id}  (알 수 없음: 구성에 없어 그대로 둡니다)`));
+    }
+    return v;
+  }
+
   private catalogLines(): Line[] {
     const v = [raw("프로젝트 구성만 읽습니다. 네트워크로 내려받지 않습니다."), raw("")];
     if (!this.project.ok) {
@@ -1138,7 +1307,8 @@ export class Wizard {
       if (e.installer === SKILLS_CLI) v.push(raw(`      스킬: ${e.skill ?? "*"}`));
       else if (e.install) v.push(raw(`      직접 실행: ${e.install}`));
     });
-    // Listed only for now: importing, downloading and hooks come later (0022 item 5).
+    // Listed only here: wiki skills are imported from the skills step, hooks are
+    // added with [훅 추가], and document downloads come later (0022 item 5).
     v.push(raw(""), { text: `위키 스킬 ${c.wikiSkills.length}개 (목록만)`, bold: true });
     for (const e of c.wikiSkills) {
       const archived = e.status === "archived" ? "  (보관됨)" : "";

@@ -65,7 +65,7 @@ The project root and the configuration source are shown in the header on every s
 - `harness.toml` stores the selected agent IDs. The guidance file name and the skills directory come from the agent entry. The IDs `claude-code` and `codex` from Stage 1 stay valid, so this needs no schema change.
 - If an agent ID in `harness.toml` is missing from the configuration, keep it in `harness.toml`, show it as unknown, and do not deploy to it.
 - There is no separate root screen. The project root is shown in the header.
-- An initialized project (`harness.toml` exists), or one whose files or configuration cannot be read, shows a summary and a no-change check in place of the agents screen and applies nothing (decided 2026-11-26). Changing an initialized harness comes with the guidance and updater work.
+- An initialized project (`harness.toml` exists), or one whose files or configuration cannot be read, shows a summary and a no-change check in place of the agents screen (decided 2026-11-26). Paths and agents cannot change there. When the check finds no conflict, it offers only two additions (instruction 0026): **add skills** (the sources and skills screen: local folder, wiki skill, public skill) and **add hooks** (§6.4). Additions go through the usual preview and apply and only add: new skills, their copies, hook records, and the matching updates of `harness.toml`, `harness.lock.json` and the managed blocks.
 - An invalid `project.json` is shown as an error on that screen; the TUI does not start the flow with `default.json` instead.
 
 ## 4. Paths
@@ -141,6 +141,8 @@ The `agent.db` rules from the Stage 1 spec §2 do not change.
 
 - Hooks are reference entries only: a title, a summary, and an optional link to a document. The TUI lists them and installs nothing.
 - For now the list is a placeholder. The built-in `default.json` holds one sample entry.
+- **Adding hooks** (instruction 0026, 2026-11-26): the user picks entries; their IDs are recorded in `harness.toml` `[[hooks]]`, and the guidance block gets a "Hooks (reference)" section with each title, summary and link plus a note to add the hooks in use to the agent's own settings and adjust them there. Nothing is installed or run. An ID the configuration no longer lists is kept and shown as unknown.
+- On the wiki source, the list button shows `wiki_skills` from the configuration. Picking one fills its UUID, type and name; archived and already imported entries are blocked.
 
 ## 7. Dynamic skills and references (content service client)
 

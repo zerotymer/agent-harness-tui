@@ -73,11 +73,11 @@ test("detectAll keeps list order", async () => {
 test("install request per OS, looked up on PATH", () => {
   using b = bin();
   fs.writeFileSync(path.join(b.dir, "npm"), "");
-  const os = currentOs();
-  if (!os) return; // not a supported platform
-  const other = os === "linux" ? "darwin" : "linux";
+  const here = currentOs();
+  if (!here) return; // not a supported platform
+  const other = here === "linux" ? "darwin" : "linux";
   const [agent] = parse(
-    `{"schema_version":2,"agents":[{"id":"a","title":{"en":"A"},"detect":["a"],"guidance":"A.md","skills_dir":".a","install":{"${os}":["npm","install","-g","a"]}}]}`,
+    `{"schema_version":2,"agents":[{"id":"a","title":{"en":"A"},"detect":["a"],"guidance":"A.md","skills_dir":".a","install":{"${here}":["npm","install","-g","a"]}}]}`,
   ).agents;
   assert.deepEqual(installRequest(agent!, b.dir), {
     program: path.join(b.dir, "npm"),

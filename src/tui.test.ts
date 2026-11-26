@@ -1,0 +1,370 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { test } from "node:test";
+import { NPX } from "./install.js";
+import { loadToken } from "./local.js";
+import { ProjectRoot } from "./paths.js";
+import { type Key, Wizard } from "./tui.js";
+
+// Row indices on the skills step (see `tui.ts`).
+const SK_KIND = 0;
+const SK_TOKEN = 2;
+const SK_REF = 4;
+const SK_ADD = 8;
+const SK_LIST = 9;
+const SK_CATALOGS = 10;
+const SK_FIXED_ROWS = 11;
+
+function project() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aht-tui-"));
+  return {
+    dir,
+    abs: (rel: string) => path.join(dir, rel),
+    read: (rel: string) => fs.readFileSync(path.join(dir, rel), "utf8"),
+    files: () => fs.readdirSync(dir).length,
+    wizard: () => Wizard.create(new ProjectRoot(dir)),
+    [Symbol.dispose]: () => fs.rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+const named = (name: Exclude<Key["name"], "char">): Key => ({ name }) as Key;
+async function press(w: Wizard, name: Exclude<Key["name"], "char">, times = 1) {
+  for (let i = 0; i < times; i++) await w.key(named(name));
+}
+async function typed(w: Wizard, text: string) {
+  for (const ch of text) await w.key({ name: "char", ch });
+}
+const screen = (w: Wizard) =>
+  w
+    .lines()
+    .map((l) => l.text)
+    .join("\n");
+
+test("walks all steps and applies only on Enter", async () => {
+  using p = project();
+  const w = await p.wizard();
+  assert.equal(w.step, "root");
+  for (const expect of ["paths", "agents", "skills", "preview"]) {
+    await press(w, "enter");
+    assert.equal(w.step, expect);
+    assert.equal(p.files(), 0, "nothing written before apply");
+  }
+  assert.match(screen(w), /create/);
+  await press(w, "enter");
+  assert.equal(w.step, "done");
+  assert.ok(fs.existsSync(p.abs("CLAUDE.md")) && fs.existsSync(p.abs("harness.toml")));
+  assert.match(screen(w), /적용을 완료했습니다/);
+  await press(w, "enter");
+  assert.ok(w.quit);
+});
+
+test("cancel, back, Esc and q never write", async () => {
+  using p = project();
+  let w = await p.wizard();
+  await press(w, "enter", 2);
+  await press(w, "esc");
+  assert.equal(w.step, "paths");
+  await press(w, "ctrl-c");
+  assert.ok(w.quit);
+
+  w = await p.wizard();
+  await press(w, "esc");
+  assert.ok(w.quit, "Esc on the first step quits");
+
+  // On the paths step the first field is a text input: `q` is typed.
+  w = await p.wizard();
+  await press(w, "enter");
+  await typed(w, "q");
+  assert.ok(!w.quit);
+  assert.equal(w.references, "referencesq");
+  // The last row (backlog toggle) is not an input: `q` quits.
+  await press(w, "up");
+  await typed(w, "q");
+  assert.ok(w.quit);
+  assert.equal(p.files(), 0);
+});
+
+test("Korean path input and validation", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter");
+  await press(w, "backspace", "references".length);
+  await typed(w, "참조 문서");
+  assert.match(screen(w), /참조 문서/);
+  // Output without a leading dot is rejected and the step stays.
+  await press(w, "down");
+  await press(w, "backspace", ".output".length);
+  await typed(w, "out");
+  await press(w, "enter");
+  assert.equal(w.step, "paths");
+  assert.match(w.message ?? "", /dot-prefixed/);
+  await press(w, "backspace", 3);
+  await typed(w, ".산출물");
+  await press(w, "enter");
+  assert.equal(w.step, "agents");
+});
+
+test("custom instructions dir is validated and applied", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter");
+  await press(w, "down", 2);
+  const retype = async (text: string) => {
+    await press(w, "backspace", [...w.instructions].length);
+    await typed(w, text);
+  };
+  await retype("references/tasks");
+  await press(w, "enter");
+  assert.equal(w.step, "paths");
+  assert.match(w.message ?? "", /nested/);
+  await retype("../tasks");
+  await press(w, "enter");
+  assert.equal(w.step, "paths");
+  assert.match(w.message ?? "", /지시서 경로/);
+
+  await retype("docs/tasks");
+  await press(w, "enter", 4);
+  assert.equal(w.step, "done");
+  assert.ok(fs.statSync(p.abs("docs/tasks/.completed")).isDirectory());
+  assert.ok(fs.statSync(p.abs("docs/tasks/completed.log")).isFile());
+  assert.ok(!fs.existsSync(p.abs("instructions")));
+  assert.match(p.read("harness.toml"), /instructions = "docs\/tasks"/);
+  assert.ok(p.read("CLAUDE.md").includes("`docs/tasks/completed.log`"));
+});
+
+test("backlog creates db and scripts and keeps an existing db", async () => {
+  const run = async (dir: ReturnType<typeof project>) => {
+    const w = await dir.wizard();
+    await press(w, "enter");
+    await press(w, "up"); // last row: backlog toggle
+    await typed(w, " ");
+    assert.match(screen(w), /instructions\/agent\.db/);
+    await press(w, "enter", 4);
+    assert.equal(w.step, "done", screen(w));
+  };
+  using p = project();
+  await run(p);
+  for (const f of ["agent.db", "agent-db.sh", "agent-db.ps1"]) {
+    assert.ok(fs.statSync(p.abs(`instructions/${f}`)).isFile(), f);
+  }
+  assert.ok(!fs.existsSync(p.abs("agent.db")));
+  assert.match(p.read("harness.toml"), /path = "instructions\/agent\.db"/);
+
+  // A fresh project that already has a database keeps it untouched.
+  using q = project();
+  fs.mkdirSync(q.abs("instructions"));
+  fs.writeFileSync(q.abs("instructions/agent.db"), "user data");
+  await run(q);
+  assert.equal(q.read("instructions/agent.db"), "user data");
+  assert.ok(fs.existsSync(q.abs("instructions/agent-db.sh")));
+});
+
+test("agents toggle and require one", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter", 2);
+  assert.match(screen(w), /심볼릭 링크 배치: 선택 불가/);
+  await typed(w, " "); // deselect Claude Code
+  await press(w, "enter");
+  assert.equal(w.step, "agents");
+  await press(w, "down", 2);
+  await typed(w, " "); // select Codex
+  await press(w, "enter");
+  assert.equal(w.step, "skills");
+});
+
+test("local skill import end to end", async () => {
+  using p = project();
+  fs.mkdirSync(p.abs("vendor/review"), { recursive: true });
+  fs.writeFileSync(p.abs("vendor/review/SKILL.md"), "---\nname: review\n---\n");
+  const w = await p.wizard();
+  await press(w, "enter", 3);
+  assert.equal(w.step, "skills");
+  await press(w, "down"); // location
+  await typed(w, "vendor");
+  w.focus = SK_LIST;
+  await press(w, "enter");
+  assert.equal(w.catalog.length, 1);
+  w.focus = SK_FIXED_ROWS;
+  await press(w, "enter"); // pick → fills reference and name
+  await press(w, "enter"); // fetch
+  assert.ok(w.fetched, w.message);
+  w.focus = SK_ADD;
+  await press(w, "enter");
+  assert.equal(w.imports.length, 1);
+  w.focus = SK_KIND;
+  await press(w, "enter"); // to preview
+  assert.equal(w.step, "preview");
+  await press(w, "enter"); // apply
+  assert.ok(fs.existsSync(p.abs(".skills/review/SKILL.md")));
+  assert.ok(fs.existsSync(p.abs(".claude/skills/review/SKILL.md")));
+  const toml = p.read("harness.toml");
+  assert.ok(toml.includes('path = "vendor"') && toml.includes('id = "review"'));
+});
+
+test("wiki import through a mock gateway saves the token", async () => {
+  const TOKEN = "tui-token-3b9d";
+  const UUID = "14cea96f-f1e2-461e-b9a7-96b5a6f63b67";
+  const body = JSON.stringify({
+    uuid: UUID,
+    type: "skill",
+    pages: {
+      en: { title: "wiki-skill-import", content: "# en\n", contentHash: "sha256:e1" },
+      ko: { title: "wiki-skill-import", content: "# ko\n", contentHash: "sha256:k1" },
+    },
+  });
+  const requests: http.IncomingMessage[] = [];
+  const server = http.createServer((req, res) => {
+    requests.push(req);
+    res.writeHead(200, { "Content-Type": "application/json" }).end(body);
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  using p = project();
+  try {
+    const w = await p.wizard();
+    w.gatewayUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    await press(w, "enter", 3);
+    await typed(w, " "); // switch to wiki
+    w.focus = SK_LIST;
+    await press(w, "enter");
+    assert.match(w.message ?? "", /직접 입력/, "no wiki catalog list");
+    w.focus = SK_TOKEN;
+    await typed(w, TOKEN);
+    assert.ok(!screen(w).includes(TOKEN));
+    w.focus = SK_REF;
+    await typed(w, UUID);
+    await press(w, "down"); // [조회]
+    await press(w, "enter");
+    assert.ok(w.fetched, w.message);
+    assert.equal(requests[0]?.url, `/api/v2/documents/${UUID}?type=skill`);
+    assert.equal(requests[0]?.headers.authorization, `Bearer ${TOKEN}`);
+    w.focus = SK_ADD;
+    await press(w, "enter");
+    assert.equal(w.imports.length, 1, w.message);
+    w.focus = SK_KIND;
+    await press(w, "enter");
+    assert.equal(w.step, "preview");
+    assert.ok(!screen(w).includes(TOKEN));
+    await press(w, "enter"); // apply
+    assert.equal(w.step, "done");
+    assert.equal(p.read(".skills/wiki-skill-import/SKILL_ko.md"), "# ko\n");
+    const lock = p.read("harness.lock.json");
+    assert.ok(lock.includes("sha256:e1") && lock.includes("sha256:k1"));
+    const done = screen(w);
+    assert.ok(done.includes(".harness/local.toml") && !done.includes(TOKEN));
+    assert.equal(loadToken(p.dir)?.expose(), TOKEN);
+    for (const tracked of ["harness.toml", "harness.lock.json", ".gitignore"]) {
+      assert.ok(!p.read(tracked).includes(TOKEN), tracked);
+    }
+    assert.ok(p.read(".gitignore").includes("/.harness/"));
+  } finally {
+    server.close();
+  }
+});
+
+test("catalog view shows the three built-in catalogs and returns", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter", 3);
+  w.focus = SK_CATALOGS;
+  await press(w, "enter");
+  assert.equal(w.step, "catalog");
+  assert.equal(w.title(), "4. 소스·스킬 ─ 카탈로그");
+  const text = screen(w);
+  for (const want of [
+    "위키 카탈로그",
+    "공개 스킬 카탈로그",
+    "문서 카탈로그",
+    "내장 샘플",
+    "버전 2026.11.23",
+    "[목록만] wiki-skill-import",
+    "직접 실행: claude plugin",
+    "anthropics-skills-README.md",
+  ]) {
+    assert.ok(text.includes(want), `${want}\n${text}`);
+  }
+  await press(w, "esc");
+  assert.equal(w.step, "skills");
+  assert.equal(w.focus, SK_CATALOGS);
+  assert.equal(p.files(), 0, "viewing catalogs writes nothing");
+});
+
+async function toInstall(w: Wizard, i: number) {
+  await press(w, "enter", 3);
+  w.focus = SK_CATALOGS;
+  await press(w, "enter");
+  assert.equal(w.step, "catalog");
+  w.focus = i;
+  await press(w, "enter");
+  assert.equal(w.step, "install");
+}
+
+test("install runs only after confirmation and reports the exit code", async () => {
+  using p = project();
+  const w = await p.wizard();
+  w.npx = path.join("/opt/node/bin", NPX);
+  await toInstall(w, 0); // built-in `anthropic-pdf`
+  assert.equal(w.takeRun(), undefined, "opening the screen runs nothing");
+  const source = "anthropics/skills@e4bb5d960d87126ff3b3a8af1a104b7db67560ba";
+  assert.ok(screen(w).includes(`${NPX} skills add ${source} -s pdf`), screen(w));
+  assert.match(screen(w), /이름 충돌: 없음/);
+  await press(w, "enter"); // confirm
+  assert.deepEqual(w.takeRun()?.args, ["skills", "add", source, "-s", "pdf"]);
+  assert.equal(w.takeRun(), undefined, "runs once");
+  w.finishRun({ ok: true, value: 3 });
+  assert.match(screen(w), /실패 \(종료 코드 3\)/);
+  w.finishRun({ ok: true, value: 0 });
+  assert.match(screen(w), /설치 성공/);
+  await press(w, "esc");
+  assert.deepEqual([w.step, w.focus], ["catalog", 0]);
+  assert.equal(p.files(), 0, "the TUI itself wrote nothing");
+});
+
+test("install is blocked without npx, on conflict and for other installers", async () => {
+  using p = project();
+  let w = await p.wizard();
+  w.npx = undefined;
+  await toInstall(w, 0);
+  assert.match(screen(w), /사용 불가/);
+  await press(w, "enter");
+  assert.equal(w.takeRun(), undefined);
+
+  w = await p.wizard();
+  w.npx = NPX;
+  w.imports.push({
+    skillId: "PDF",
+    sourceId: "local",
+    reference: "pdf",
+    acceptPartial: false,
+    package: { files: [], missingLocales: [], warnings: [] },
+  });
+  await toInstall(w, 0);
+  assert.match(screen(w), /하네스 스킬 `PDF`/);
+  await press(w, "enter");
+  assert.equal(w.takeRun(), undefined, "name conflict blocks the run");
+
+  // `claude-code-cli` entry: text only.
+  w = await p.wizard();
+  w.npx = NPX;
+  await toInstall(w, 2);
+  assert.match(screen(w), /claude plugin marketplace add/);
+  await press(w, "enter");
+  assert.equal(w.takeRun(), undefined);
+});
+
+test("initialized project is summary and verify only", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter", 5);
+  assert.equal(w.step, "done");
+  const again = await p.wizard();
+  assert.match(screen(again), /이미 초기화된 프로젝트/);
+  assert.match(screen(again), /변경할 항목이 없습니다/);
+  await press(again, "enter");
+  assert.ok(again.quit, "no re-init path");
+  assert.equal(again.step, "root");
+});

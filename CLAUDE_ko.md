@@ -6,23 +6,15 @@
 
 1단계 구현을 마쳤고 사용자가 인수했습니다(2026-11-20, `docs/STAGE1_REPORT_ko.md` 참고). 1단계 이후 단계는 `instructions/0022_flow-redesign.md`의 플로우 재설계(2026-11-23)를 기준으로 다시 정의하는 중입니다. 2단계는 이 플로우(에이전트, 경로, 지침, 카탈로그)가 되고, 3단계는 나머지 추가 기능을 유지합니다. 동적 스킬과 동적 참조 문서를 제공하는 콘텐츠 서비스는 별도 프로그램이며, 이 리포지토리는 그 클라이언트만 구현합니다. 이 리포지토리에는 에이전트 하네스를 구성하는 독립형 TUI의 명세(SDD)와 그 구현 `agent-harness-tui`가 들어 있습니다.
 
-**플랫폼 변경(2026-11-24):** 구현을 Rust(Ratatui + Crossterm)에서 Node.js로 옮깁니다. Node.js 22.13 이상에서 TypeScript + Ink 8을 쓰고, pnpm으로 개발하며, 내장 `node:test`로 테스트하고, GitHub Release에 `npm pack` 타르볼로 배포합니다(`npm install -g <타르볼 URL>`로 설치, 지금은 npm 레지스트리에 공개하지 않음). 에이전트와 스킬을 npm으로 설치하므로 환경 전체를 Node.js로 통일합니다. 지시서 0025가 1단계를 인수 테스트와 함께 Node로 이식하고, 같은 PR에서 Rust 크레이트를 지웁니다. 0023과 0024는 그 뒤에 Node로 구현합니다. 0025를 마칠 때까지는 아래 Rust 명령이 그대로 유효합니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
+**플랫폼(2026-11-24, 지시서 0025):** 구현은 Node.js 22.13 이상에서 TypeScript + Ink 8을 쓰고, pnpm으로 개발하며, 내장 `node:test`로 테스트합니다. 1단계는 Rust(Ratatui + Crossterm)로 만들어 인수했고, 0025가 인수 테스트와 함께 Node로 이식한 뒤 Rust 크레이트를 지웠습니다. 에이전트와 스킬을 npm으로 설치하므로 환경 전체를 Node.js로 통일합니다. 0023과 0024는 Node로 구현합니다. 리포지토리 자체도 하네스가 관리하는 구조와 비슷한 구조를 따릅니다.
 
-현재(Rust, 0025 전까지):
-
-- 빌드: `cargo build`
-- 테스트: `cargo test` (테스트는 임시 디렉터리에 대상 프로젝트를 만들어 검증합니다)
-- 린트: `cargo clippy --all-targets -- -D warnings`
-- 포맷: `cargo fmt --check`
-- 툴체인: `rust-toolchain.toml`에 고정 (Rust 1.97.1, rustfmt·clippy 포함).
-- CI: `.github/workflows/ci.yml`이 PR과 `main` push마다 Linux·Windows·macOS에서 clippy·테스트·release 빌드를 실행하고(fmt는 Linux), 실행 파일을 워크플로 결과물로 올립니다. 액션은 공식 `actions/*`만 쓰며 커밋 SHA로 고정합니다.
-- 릴리스: `Cargo.toml` 버전과 같은 `v*` 태그를 push하면(예: `git tag v0.1.0 && git push origin v0.1.0`) `.github/workflows/release.yml`이 세 OS에서 테스트·빌드하고 실행 파일과 `SHA256SUMS`를 GitHub Release로 올립니다. `contents: write` 권한은 게시 작업에만 줍니다.
-
-목표(Node, 0025부터. 정확한 스크립트는 0025에서 정합니다):
-
-- 설치: `pnpm install`. 빌드: `pnpm build`(TypeScript를 JavaScript로. Node 22는 TypeScript를 직접 실행하지 못합니다). 테스트: `pnpm test`(`node:test`). 린트·타입 검사: `pnpm lint`.
+- 설치: `pnpm install` (pnpm은 `packageManager`로 고정하고 Corepack으로 켭니다).
+- 빌드: `pnpm build` (TypeScript를 `dist/`로. Node 22는 TypeScript를 직접 실행하지 못합니다).
+- 테스트: `pnpm test` (빌드한 뒤 `dist/**/*.test.js`에 `node:test` 실행. 테스트는 임시 디렉터리에 대상 프로젝트를 만들어 검증합니다).
+- 린트·타입 검사: `pnpm lint` (Biome + `tsc --noEmit`). 포맷: `pnpm exec biome check --write src`.
 - `package.json`에 `"engines": { "node": ">=22.13" }`를 둡니다. Ink 8과 Claude Code npm 패키지는 22가 필요하고, 내장 `node:sqlite`는 22.13부터 플래그 없이 동작합니다.
-- CI와 릴리스는 같은 형태를 유지합니다. 세 OS, SHA로 고정한 공식 `actions/*`, `package.json` 버전과 같은 `v*` 태그로 릴리스, `contents: write`는 게시 작업에만.
+- CI: `.github/workflows/ci.yml`이 PR과 `main` push마다 Linux·Windows·macOS에서 린트(Linux)·테스트·`pnpm pack`·타르볼 설치 스모크 테스트를 실행하고, 타르볼을 워크플로 결과물로 올립니다. 액션은 공식 `actions/*`만 쓰며 커밋 SHA로 고정합니다.
+- 릴리스: `package.json` 버전과 같은 `v*` 태그를 push하면(예: `git tag v0.1.1 && git push origin v0.1.1`) `.github/workflows/release.yml`이 세 OS에서 테스트와 설치 스모크를 거친 뒤 `npm pack` 타르볼과 `SHA256SUMS`를 GitHub Release로 올립니다. 사용자는 `npm install -g <타르볼 URL>`로 설치하며, 지금은 npm 레지스트리에 공개하지 않습니다. `contents: write` 권한은 게시 작업에만 줍니다.
 
 - `README.md` / `README_ko.md`: 목적, 설계 결정, 구현 전에 다시 확인해야 할 공식 출처.
 - `references/STEP_1_INITIAL_CREATION*.md`: 1단계, 초기 하네스 생성.

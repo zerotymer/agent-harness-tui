@@ -2,18 +2,24 @@
 
 `agent-harness-tui`는 실행한 프로젝트에 에이전트 하네스를 구성하는 터미널 마법사다. 지시서 폴더, 에이전트 지침(`AGENTS.md`, `CLAUDE.md`와 각 `_ko.md` 쌍), `.skills/` 아래의 공유 스킬, `.gitignore` 블록을 만든다. 모든 변경은 먼저 미리보기로 보여 주고, 사용자가 확인할 때만 쓴다.
 
-이 문서는 1단계(최초 생성)와 2단계 카탈로그 기능을 다룬다. 2단계 기능은 세 카탈로그 읽기, 위키 카탈로그에서 위키 스킬 가져오기, skills CLI로 공개 스킬 설치, 문서 목록 표시다. 이미 만든 하네스의 갱신은 3단계에 제공한다.
+이 문서는 1단계(최초 생성)와 2단계 카탈로그 기능을 다룬다. 2단계 기능은 내장 카탈로그 세 개 보기, skills CLI로 공개 스킬 설치, 문서 목록 표시다. 이미 만든 하네스의 갱신은 3단계에 제공한다.
 
 ## 설치
 
-Linux·Windows·macOS용 실행 파일은 GitHub Release마다 올라간다(`.tar.gz`, Windows는 `.zip`). 함께 올라가는 `SHA256SUMS`로 파일을 확인할 수 있다. 또는 소스에서 빌드한다:
+필요 조건: Node.js 22.13 이상(`npm` 포함).
 
-필요 조건: 안정 버전 Rust 툴체인. 1단계는 Rust 1.97.1, edition 2024로 빌드·테스트했다.
+GitHub Release마다 `npm pack` 타르볼(`agent-harness-tui-<버전>.tgz`)과 확인용 `SHA256SUMS`가 올라간다. URL이나 내려받은 파일로 전역 설치한다:
 
 ```sh
-cargo install --path .          # ~/.cargo/bin에 `agent-harness-tui` 설치
-# 또는
-cargo build --release           # 실행 파일: target/release/agent-harness-tui
+npm install -g https://github.com/zerotymer/agent-harness-tui/releases/download/v<버전>/agent-harness-tui-<버전>.tgz
+```
+
+npm 레지스트리에는 공개하지 않는다. 소스에서 빌드하려면 pnpm이 필요하다(`corepack enable`로 켠다):
+
+```sh
+pnpm install
+pnpm build                      # dist/에 JavaScript 생성
+pnpm pack                       # agent-harness-tui-<버전>.tgz 생성 후 npm install -g ./agent-harness-tui-<버전>.tgz
 ```
 
 관리자 권한은 필요 없다. 네트워크는 위키 게이트웨이에서 스킬을 가져올 때만 필요하다.
@@ -66,21 +72,15 @@ agent-harness-tui
 - **위키 게이트웨이(`md.zerotymer.net`).** 도구는 게이트웨이 `https://md-gw.zerotymer.net`에서 `GET /api/v2/documents/<uuid>`(게이트웨이 API v2)로 읽는다.
   - **토큰(선택):** 지금은 읽기에 토큰이 필요 없다. 토큰 행에 토큰을 입력할 수 있다. 입력한 값은 화면에 그리지 않고, 적용에 성공한 뒤 Git이 무시하는 `.harness/local.toml`에 저장한다. 토큰 변수 행에 적은 환경변수(기본값 `GATEWAY_TOKEN`)에 토큰이 있으면 입력하거나 저장한 토큰보다 우선한다. 게이트웨이가 401/403으로 응답하면 토큰을 넣는다. 토큰은 추적 파일, 화면, 오류 메시지에 나오지 않는다.
   - **유형:** 선택 사항인 Wiki.js 경로 접두어(예: `skill`, `claude/hook`).
-  - **조회:** 페이지 UUID를 입력하고 [조회]를 누른다. 네트워크는 그때만 쓴다. 요청은 15초가 지나면 시간 초과로 끝나며, 응답이 올 때까지 화면이 갱신되지 않는다.
+  - **조회:** 페이지 UUID를 입력하고 [조회]를 누른다. 네트워크는 그때만 쓴다. 요청은 15초가 지나면 시간 초과로 끝난다. 응답이 올 때까지 키 안내 줄에 "처리 중…"이 나오고 다른 키는 무시한다.
   - **내용:** 영문·한국어 페이지를 가공 없이 `SKILL.md`, `SKILL_ko.md`로 저장한다. 한 언어가 빠졌으면 부분 가져오기를 수락해야 하며, 빠진 번역을 만들어 내지 않는다.
-  - **목록:** [목록 불러오기]는 위키 카탈로그를 보여 준다. 항목을 고르면 UUID, type, 스킬 이름이 채워진다. 보관된 항목과 `target`이 `skill`이 아닌 항목은 목록에 보이지만 가져올 수 없다.
+  - **목록:** [목록 불러오기]는 로컬 폴더에서만 동작한다. 위키 카탈로그에서 페이지를 골라 가져오기는 지원하지 않는다. [카탈로그 보기]에 위키 항목과 UUID가 나오므로 UUID를 직접 입력한다.
 
 ## 카탈로그
 
 세 로컬 JSON 파일이 고를 수 있는 항목을 담는다: `wiki.json`(Wiki.js 페이지), `skills.json`(공개 스킬), `docs.json`(문서). 형식은 [`references/HARNESS_CATALOG_CONTRACT_ko.md`](../references/HARNESS_CATALOG_CONTRACT_ko.md)에 있다. 도구는 카탈로그를 내려받지 않는다. 도구를 배포하는 쪽이 파일도 함께 배포한다.
 
-카탈로그마다 다음 순서로 찾고, 처음 찾은 것을 쓴다.
-
-1. `AGENT_HARNESS_WIKI_CATALOG`, `AGENT_HARNESS_SKILLS_CATALOG`, `AGENT_HARNESS_DOCS_CATALOG`에 지정한 경로. 상대 경로는 프로젝트 루트 기준이다.
-2. 실행 파일 옆의 `catalog/<kind>.json`
-3. 실행 파일에 내장된 샘플(이 저장소의 `catalog/`)
-
-모르는 키, 맞지 않는 `kind`, 지원하지 않는 `schema_version`, 중복 `id`가 있는 파일은 오류를 보여 주며 거부하고, 다른 카탈로그로 대체하지 않는다. 스킬 단계의 [카탈로그 보기]는 카탈로그마다 출처, `catalog_version`, 항목별 상태를 보여 준다. 상태는 사용 가능, 가져옴, 보관됨, 충돌(`.skills/<id>/` 폴더가 이미 있음), 목록만 중 하나다. 문서는 지금은 목록만 보여 준다.
+카탈로그는 패키지에 들어 있는 샘플(이 저장소의 `catalog/`)이다. 모르는 키, 맞지 않는 `kind`, 지원하지 않는 `schema_version`, 중복 `id`가 있으면 그 카탈로그는 쓰지 않고 오류로 보여 준다. 스킬 단계의 [카탈로그 보기]는 카탈로그마다 출처와 `catalog_version`을 보여 준다. 위키 항목과 문서는 목록만 보여 주고, 공개 스킬은 설치 가능, 사용 불가(`npx` 없음), 충돌, 직접 설치 중 하나로 표시한다. 지시서 0023에서 이 카탈로그는 프로젝트 구성으로 바뀐다.
 
 ## 공개 스킬 설치
 
@@ -91,7 +91,7 @@ npx skills add <source> [-s <skill>]
 ```
 
 - 항목에 `skill`이 없거나 `*`이면 `-s`를 빼며, 이때 CLI가 source의 모든 스킬을 보여 준다.
-- TUI는 `-a`, `-g`, `-y`를 붙이지 않는다. Enter를 누르면 TUI 화면을 닫고 터미널을 skills CLI에 넘긴다. 대상 에이전트, project·user 범위, 스킬은 CLI가 직접 묻는다. CLI가 끝나면 Enter를 눌러 돌아오고, TUI가 종료 코드를 보여 준다. 0이 아니면 실패다.
+- TUI는 `-a`, `-g`, `-y`를 붙이지 않는다. Enter를 누르면 TUI 화면을 닫고 터미널을 skills CLI에 넘긴다. 대상 에이전트, project·user 범위, 스킬은 CLI가 직접 묻는다. CLI가 끝나면 TUI로 돌아와 종료 코드를 보여 준다. 0이 아니면 실패다.
 - 셸 없이 프로젝트 루트에서 실행한다(Windows는 `npx.cmd`). `PATH`에 `npx`가 없으면 설치를 사용 불가로 표시한다.
 - 버전을 고정하려면 카탈로그가 CLI 문법으로 `source`에 적는다(예: `owner/repo@<커밋 SHA>`).
 - 이름 충돌: 항목의 `skill`이 하네스가 배포했거나 선택한 스킬과 같으면(대소문자 무시) 설치를 막는다. 모든 스킬을 설치할 때는 이름을 미리 알 수 없으므로, 검사를 할 수 없다고 화면에서 경고한다.

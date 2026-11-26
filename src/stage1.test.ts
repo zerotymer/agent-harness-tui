@@ -276,7 +276,10 @@ test("interrupted apply restores files and records no success", {
 function git(dir: string, ...args: string[]): [boolean, string] {
   const out = spawnSync("git", ["-C", dir, "-c", "core.quotePath=false", ...args], {
     encoding: "utf8",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: os.devNull },
+    env: {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: "/dev/null" /* Git for Windows maps this; it cannot read \\.\nul */,
+    },
   });
   return [out.status === 0, out.stdout ?? ""];
 }

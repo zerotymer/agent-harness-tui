@@ -23,9 +23,6 @@ agent.db-journal
 !.env.example
 .credentials.json
 
-# Rust build output
-/target/
-
 # Node build output and dependencies
 /node_modules/
 /dist/

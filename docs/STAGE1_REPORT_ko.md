@@ -1,5 +1,7 @@
 # 1단계 검증 보고
 
+> 2026-11-26: 구현을 Node.js(TypeScript + Ink, 지시서 0025)로 옮기고 Rust 크레이트를 지웠다. 이 보고는 인수된 Rust 빌드의 기록으로 남긴다. 같은 인수 테스트 11개는 이제 `src/stage1.test.ts`에서 돈다.
+
 일자: 2026-11-16. 범위: 지시서 0001–0011. `main`의 `bdafb75`에 0011 브랜치를 더한 상태로 빌드했다. 명세: [`references/STEP_1_INITIAL_CREATION_ko.md`](../references/STEP_1_INITIAL_CREATION_ko.md) §8.
 
 ## 환경

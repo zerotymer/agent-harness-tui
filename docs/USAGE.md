@@ -2,18 +2,24 @@
 
 `agent-harness-tui` is a terminal wizard that sets up an agent harness in the project you run it from. It creates instruction folders, agent guidance (`AGENTS.md`, `CLAUDE.md` and their `_ko.md` pairs), shared skills under `.skills/`, and a `.gitignore` block. Every change is previewed first and written only when you confirm.
 
-This document covers Stage 1, initial creation, and the Stage 2 catalogs: reading the three catalogs, importing wiki skills from the wiki catalog, installing public skills with the skills CLI, and listing documents. Updating an existing harness is Stage 3.
+This document covers Stage 1, initial creation, and the Stage 2 catalogs: viewing the three built-in catalogs, installing public skills with the skills CLI, and listing documents. Updating an existing harness is Stage 3.
 
 ## Install
 
-Prebuilt binaries for Linux, Windows and macOS are attached to each GitHub Release (`.tar.gz`, or `.zip` on Windows), with a `SHA256SUMS` file to check them against. Or build from source:
+Requirements: Node.js 22.13 or later (it includes `npm`).
 
-Requirements: a stable Rust toolchain. Stage 1 was built and tested with Rust 1.97.1, edition 2024.
+Each GitHub Release attaches an `npm pack` tarball (`agent-harness-tui-<version>.tgz`) with a `SHA256SUMS` file to check it against. Install it globally from its URL or a downloaded copy:
 
 ```sh
-cargo install --path .          # installs `agent-harness-tui` into ~/.cargo/bin
-# or
-cargo build --release           # binary at target/release/agent-harness-tui
+npm install -g https://github.com/zerotymer/agent-harness-tui/releases/download/v<version>/agent-harness-tui-<version>.tgz
+```
+
+The package is not published to the npm registry. To build from source instead, you need pnpm (enable it with `corepack enable`):
+
+```sh
+pnpm install
+pnpm build                      # JavaScript in dist/
+pnpm pack                       # agent-harness-tui-<version>.tgz, then npm install -g ./agent-harness-tui-<version>.tgz
 ```
 
 You don't need administrator rights. You need network access only to fetch skills from the wiki gateway.
@@ -66,21 +72,15 @@ The tool changes existing files only inside managed blocks that start with `agen
 - **Wiki gateway (`md.zerotymer.net`).** The tool reads the gateway `https://md-gw.zerotymer.net` with `GET /api/v2/documents/<uuid>` (gateway API v2).
   - **Token (optional):** reads currently need no token. You can type one in the token row; it is never drawn on screen, and after a successful apply it is saved to `.harness/local.toml`, which Git ignores. A token in the environment variable named in the token variable row (default `GATEWAY_TOKEN`) wins over the typed or saved token. If the gateway answers 401/403, give a token. The token never appears in tracked files, screens or error messages.
   - **Type:** optional Wiki.js path prefix such as `skill` or `claude/hook`.
-  - **Fetching:** enter a page UUID and press [조회] (fetch). The network is used only at that moment. The request times out after 15 seconds, and the screen does not update until the response arrives.
+  - **Fetching:** enter a page UUID and press [조회] (fetch). The network is used only at that moment. The request times out after 15 seconds; the key bar shows 처리 중… (working) and other keys are ignored until the response arrives.
   - **Content:** English and Korean pages become `SKILL.md` and `SKILL_ko.md`, unchanged. If one language is missing, you must accept a partial import. The tool never creates a missing translation.
-  - **Catalog:** [목록 불러오기] (load list) shows the wiki catalog. Picking an entry fills in its UUID, type and skill name. Archived entries and entries whose `target` is not `skill` are listed but cannot be imported.
+  - **List:** [목록 불러오기] (load list) works for local folders only. Picking a wiki page from the wiki catalog is not supported; [카탈로그 보기] (view catalogs) lists the wiki entries with their UUIDs so you can type one in.
 
 ## Catalogs
 
 Three local JSON files list what you can pick: `wiki.json` (Wiki.js pages), `skills.json` (public skills) and `docs.json` (documents). Their format is in [`references/HARNESS_CATALOG_CONTRACT.md`](../references/HARNESS_CATALOG_CONTRACT.md). The tool never downloads a catalog; whoever distributes the tool also distributes the files.
 
-Each catalog is looked up in this order, and the first one found is used:
-
-1. The path in `AGENT_HARNESS_WIKI_CATALOG`, `AGENT_HARNESS_SKILLS_CATALOG` or `AGENT_HARNESS_DOCS_CATALOG`. A relative path is taken from the project root.
-2. `catalog/<kind>.json` next to the executable.
-3. The sample built into the executable (this repository's `catalog/`).
-
-A file with an unknown key, the wrong `kind`, an unsupported `schema_version` or a duplicate `id` is rejected with an error, and the tool does not fall back to another catalog. [카탈로그 보기] (view catalogs) on the skills step shows each catalog's origin, `catalog_version` and per-entry state: available, imported, archived, conflict (the `.skills/<id>/` folder already exists), or list only. Documents are list only for now.
+The catalogs are the samples bundled with the package (this repository's `catalog/`). A bundled file with an unknown key, the wrong `kind`, an unsupported `schema_version` or a duplicate `id` is shown as an error instead of being used. [카탈로그 보기] (view catalogs) on the skills step shows each catalog's origin and `catalog_version`. Wiki entries and documents are list only; public skills show available, unavailable (no `npx`), conflict or manual install. Instruction 0023 replaces these catalogs with the project configuration.
 
 ## Installing public skills
 
@@ -91,7 +91,7 @@ npx skills add <source> [-s <skill>]
 ```
 
 - `-s` is left out when the entry has no `skill` or `*`; the CLI then offers every skill in the source.
-- The TUI adds no `-a`, `-g` or `-y`. When you press Enter, the TUI screen closes and the terminal is handed to the skills CLI, which asks for the target agents, project or user scope, and skills itself. When it exits, press Enter to return; the TUI shows the exit code, and anything other than 0 is a failure.
+- The TUI adds no `-a`, `-g` or `-y`. When you press Enter, the TUI screen closes and the terminal is handed to the skills CLI, which asks for the target agents, project or user scope, and skills itself. When it exits, the TUI comes back and shows the exit code; anything other than 0 is a failure.
 - It runs without a shell in the project root (`npx.cmd` on Windows). If `npx` is not on `PATH`, installing shows as unavailable.
 - To pin a version, the catalog writes it into `source` in the CLI's syntax, for example `owner/repo@<commit-sha>`.
 - Name conflicts: if the entry's `skill` matches a skill the harness deployed or selected (ignoring case), the install is blocked. When installing every skill, names are not known in advance, so the screen warns that the check is unavailable.

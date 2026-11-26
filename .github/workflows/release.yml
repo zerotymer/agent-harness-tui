@@ -1,6 +1,8 @@
-# Release for agent-harness-tui (instruction 0014).
-# Pushing a `v*` tag that matches Cargo.toml builds Linux, Windows and macOS
-# binaries and publishes them with SHA256SUMS as a GitHub Release.
+# Release for agent-harness-tui (instructions 0014, 0025).
+# Pushing a `v*` tag that matches package.json tests and smoke-installs the
+# `pnpm pack` tarball on Linux, Windows and macOS, then publishes the tarball
+# with SHA256SUMS as a GitHub Release. Users install it with
+# `npm install -g <tarball URL>`; nothing is published to the npm registry.
 # Official actions only, pinned to commit SHAs (tag in the trailing comment).
 name: Release
 
@@ -10,9 +12,6 @@ on:
 
 permissions:
   contents: read
-
-env:
-  CARGO_TERM_COLOR: always
 
 jobs:
   build:
@@ -29,37 +28,40 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Toolchain
-        run: rustup toolchain install
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
 
-      - name: Tag matches Cargo.toml
+      - name: Tag matches package.json
         run: |
-          version=$(cargo pkgid | sed 's/.*[#@]//')
+          version=$(node -p "require('./package.json').version")
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
             exit 1
           fi
 
-      - name: Test
-        run: cargo test --locked
-
-      - name: Release build
-        run: cargo build --release --locked
-
-      - name: Package
+      - name: pnpm
         run: |
-          name="agent-harness-tui-${GITHUB_REF_NAME}-${RUNNER_OS}-${RUNNER_ARCH}"
-          mkdir dist
-          if [ "$RUNNER_OS" = Windows ]; then
-            7z a "dist/$name.zip" ./target/release/agent-harness-tui.exe
-          else
-            tar -czf "dist/$name.tar.gz" -C target/release agent-harness-tui
-          fi
+          corepack enable
+          pnpm install --frozen-lockfile
 
+      - name: Test
+        run: pnpm test
+
+      - name: Pack
+        run: pnpm pack --pack-destination pack
+
+      - name: Install smoke
+        run: |
+          npm install -g ./pack/agent-harness-tui-*.tgz
+          agent-harness-tui --version
+
+      # The tarball is platform-independent; publish the Linux one.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: runner.os == 'Linux'
         with:
-          name: release-${{ runner.os }}
-          path: dist/*
+          name: release-tarball
+          path: pack/*.tgz
           if-no-files-found: error
           retention-days: 1
 
@@ -71,9 +73,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: release-*
+          name: release-tarball
           path: dist
-          merge-multiple: true
 
       - name: Publish
         env:

@@ -112,9 +112,10 @@ export interface PendingRun {
 }
 
 type InputField =
-  | "references"
-  | "output"
   | "instructions"
+  | "artifacts"
+  | "docs"
+  | "references"
   | "tokenEnv"
   | "localDir"
   | "token"
@@ -138,9 +139,11 @@ export class Wizard {
   // agents
   agents: AgentRow[] = [];
   // paths
-  references = defaultLayout().references.toString();
-  output = defaultLayout().output.toString();
-  instructions = defaultLayout().instructions.toString();
+  // Text fields; an empty optional path means disabled.
+  instructions = "";
+  artifacts = "";
+  docs = "";
+  references = "";
   backlog = false;
   // sources and skills
   wiki = false;
@@ -183,6 +186,15 @@ export class Wizard {
     this.project = attempt(() => catalog.load(root.path));
     this.storedToken = attempt(() => loadToken(root.path));
     this.npx = install.findProgram(install.NPX, pathValue);
+    // Initial paths: `project.json` `paths` (null = disabled), else the defaults.
+    const d = defaultLayout();
+    const start = this.project.ok ? this.project.value.config.paths : undefined;
+    const pick = (v: string | null | undefined, fallback: RelPath | undefined) =>
+      v === null ? "" : (v ?? fallback?.toString() ?? "");
+    this.instructions = pick(start?.instructions, d.instructions);
+    this.artifacts = pick(start?.artifacts, d.artifacts);
+    this.docs = pick(start?.docs, d.docs);
+    this.references = pick(start?.references, d.references);
     this.agents = this.agentEntries().map((entry) => ({
       entry,
       selected: entry.default,
@@ -289,7 +301,7 @@ export class Wizard {
   rows(): number {
     switch (this.step) {
       case "paths":
-        return 4;
+        return 5;
       case "agents":
         return this.agents.length * 2 + 2;
       case "skills":
@@ -312,7 +324,7 @@ export class Wizard {
   }
 
   focusIsInput(): boolean {
-    if (this.step === "paths") return this.focus <= 2;
+    if (this.step === "paths") return this.focus <= 3;
     if (this.step === "skills") {
       return [SK_LOCATION, SK_TOKEN, SK_TYPE, SK_REF, SK_NAME].includes(this.focus);
     }
@@ -322,7 +334,7 @@ export class Wizard {
   private inputField(): InputField | undefined {
     const f = this.focus;
     if (this.step === "paths") {
-      return (["references", "output", "instructions"] as const)[f];
+      return (["instructions", "artifacts", "docs", "references"] as const)[f];
     }
     if (this.step !== "skills") return undefined;
     if (f === SK_LOCATION) {
@@ -338,7 +350,7 @@ export class Wizard {
 
   private toggle() {
     const f = this.focus;
-    if (this.step === "paths" && f === 3) {
+    if (this.step === "paths" && f === 4) {
       this.backlog = !this.backlog;
     } else if (this.step === "agents") {
       const a = this.agents[Math.floor(f / 2)];
@@ -562,12 +574,19 @@ export class Wizard {
         throw new Error(`${label}: ${(e as Error).message}`);
       }
     };
+    if (this.instructions.trim() === "") throw new Error("지시서 경로는 비울 수 없습니다.");
+    const optional = (label: string, input: string) =>
+      input.trim() === "" ? undefined : resolve(label, input);
     const layout: Layout = {
-      references: resolve("참조 문서 경로", this.references),
-      output: resolve("산출물 경로", this.output),
       instructions: resolve("지시서 경로", this.instructions),
       backlogEnabled: this.backlog,
     };
+    const artifacts = optional("임시 산출물 경로", this.artifacts);
+    const docs = optional("산출물 경로", this.docs);
+    const references = optional("참조 문서 경로", this.references);
+    if (artifacts) layout.artifacts = artifacts;
+    if (docs) layout.docs = docs;
+    if (references) layout.references = references;
     const errs = validateLayout(layout, this.root);
     if (errs.length > 0) throw new Error(errs.map((e) => e.message).join("; "));
     return layout;
@@ -686,11 +705,8 @@ export class Wizard {
   config(): HarnessConfig {
     const layout = this.layout();
     const c = defaultConfig();
-    c.paths = {
-      instructions: layout.instructions,
-      references: layout.references,
-      output: layout.output,
-    };
+    const { backlogEnabled: _, ...paths } = layout;
+    c.paths = paths;
     c.backlog = { enabled: this.backlog, path: backlogPath(layout) };
     c.agents = this.agents
       .filter((a) => a.selected)
@@ -853,7 +869,9 @@ export class Wizard {
     v.push(raw("이미 초기화된 프로젝트입니다. 요약과 무변경 검증만 제공합니다."));
     v.push(raw("변경(스킬 추가·갱신 등)은 2단계 업데이트 기능에서 다룹니다."));
     v.push(raw(""));
-    v.push(raw(`참조 문서: ${c.paths.references}/   산출물: ${c.paths.output}/`));
+    const shown = (p: RelPath | undefined) => (p ? `${p}/` : "사용 안 함");
+    v.push(raw(`지시서: ${c.paths.instructions}/   임시 산출물: ${shown(c.paths.artifacts)}`));
+    v.push(raw(`산출물(문서): ${shown(c.paths.docs)}   참조 문서: ${shown(c.paths.references)}`));
     v.push(raw(`백로그: ${c.backlog.enabled ? "사용" : "사용 안 함"}`));
     for (const a of c.agents) {
       const e = this.agentEntries().find((x) => x.id === a.id);
@@ -896,15 +914,22 @@ export class Wizard {
   private pathsLines(): Line[] {
     const f = this.focus;
     return [
-      this.row(0, `참조 문서 경로: ${input(this.references, f === 0)}`),
-      this.row(1, `산출물 경로:   ${input(this.output, f === 1)}  (이름은 점으로 시작)`),
-      this.row(
-        2,
-        `지시서 경로:   ${input(this.instructions, f === 2)}  (.completed/·completed.log 포함)`,
-      ),
-      this.row(3, `백로그 agent.db: ${check(this.backlog)}`),
+      this.row(0, `지시서 (필수):     ${input(this.instructions, f === 0)}`),
+      this.row(1, `임시 산출물:       ${optionalInput(this.artifacts, f === 1)}  Git 무시`),
+      this.row(2, `산출물(문서):      ${optionalInput(this.docs, f === 2)}  Git 추적`),
+      this.row(3, `참조 문서:         ${optionalInput(this.references, f === 3)}  Git 추적`),
+      this.row(4, `백로그 agent.db: ${check(this.backlog)}`),
       raw(""),
-      raw("고정 경로 (1단계에서 변경 불가):"),
+      raw("선택 경로는 비우면 사용하지 않습니다(만들지 않고 .gitignore·지침에도 적지 않음)."),
+      raw(
+        "이름 형식은 강제하지 않습니다. TUI는 경로를 만들기만 하며, 기존 폴더를 옮기거나 지우지 않습니다.",
+      ),
+      raw("새로 만드는 추적 폴더에는 빈 .gitkeep을 둡니다."),
+      raw(
+        `지시서 폴더 바로 아래 *.md는 Git에서 제외합니다(README.md 제외). .completed/와 completed.log는 추적합니다.`,
+      ),
+      raw(""),
+      raw("고정 경로:"),
       raw(`  ${skillsDir()}/  스킬 원본`),
       raw(
         `  ${this.instructions.replace(/\/+$/, "")}/agent.db·agent-db.sh·agent-db.ps1  백로그 (지시서 경로를 따름)`,
@@ -1223,5 +1248,7 @@ function gitLines(g: GitReport): Line[] {
 }
 
 const check = (on: boolean) => (on ? "[x]" : "[ ]");
+const optionalInput = (value: string, focused: boolean) =>
+  value === "" && !focused ? "(사용 안 함)" : input(value, focused);
 const input = (value: string, focused: boolean) => (focused ? `${value}▏` : value);
 const placementName = (p: Placement) => (p === "copy" ? "복사" : "참조");

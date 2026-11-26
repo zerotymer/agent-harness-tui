@@ -20,14 +20,20 @@ export const BLOCK_ID = "agent-harness";
 /** Lines of the managed block. Patterns are anchored to the project root. */
 export function ignoreBody(config: HarnessConfig, copies: RelPath[]): string {
   const db = config.backlog.path;
+  const inst = config.paths.instructions;
+  const artifacts = config.paths.artifacts;
   const lines = [
-    `/${config.paths.output}/`,
+    ...(artifacts ? [`/${artifacts}/`] : []),
     "/.harness/",
     // Reserved even while the backlog is disabled.
     `/${db}`,
     `/${db}-wal`,
     `/${db}-shm`,
     `/${db}-journal`,
+    // Active instructions stay local; `.completed/`, the log and scripts
+    // below the root are not matched and stay tracked.
+    `/${inst}/*.md`,
+    `!/${inst}/README.md`,
     ...copies.map((c) => `/${c}/`),
   ];
   return `${lines.join("\n")}\n`;
@@ -50,7 +56,8 @@ export function sharedPaths(
     completedDir(layout),
     completedLog(layout),
     layout.instructions,
-    config.paths.references,
+    ...(config.paths.docs ? [config.paths.docs] : []),
+    ...(config.paths.references ? [config.paths.references] : []),
     skillsDir(),
     RelPath.unchecked(CONFIG_FILE),
     RelPath.unchecked(LOCK_FILE),
@@ -109,7 +116,7 @@ export function gitReport(
   }
 
   const ignored = [
-    `${config.paths.output}`,
+    ...(config.paths.artifacts ? [`${config.paths.artifacts}`] : []),
     ".harness",
     `${config.backlog.path}`,
     ...copies.map(String),
@@ -122,7 +129,10 @@ export function gitReport(
     );
   }
 
-  for (const dir of [completedDir(configLayout(config)), config.paths.references]) {
+  const tracked = [completedDir(configLayout(config)), config.paths.docs, config.paths.references];
+  for (const dir of tracked) {
+    // New directories get a `.gitkeep`; only existing empty ones need a note.
+    if (!dir || !fs.existsSync(root.abs(dir))) continue;
     if (!hasFile(root.abs(dir))) {
       r.notes.push(`\`${dir}/\` has no files; Git does not share empty directories`);
     }

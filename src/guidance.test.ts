@@ -36,7 +36,7 @@ type Project = ReturnType<typeof project>;
 function config(): HarnessConfig {
   const c = defaultConfig();
   c.paths.references = RelPath.parse("docs/참조 문서");
-  c.paths.output = RelPath.parse(".out");
+  c.paths.artifacts = RelPath.parse(".out");
   c.agents = [
     { id: "claude-code", placement: "reference" },
     { id: "codex", placement: "reference" },

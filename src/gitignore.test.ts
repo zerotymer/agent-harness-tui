@@ -48,11 +48,13 @@ const copies = () => [RelPath.parse(".claude/skills/review")];
 
 test("body lists only harness paths", () => {
   const c = config();
-  c.paths.output = RelPath.parse("build/.out");
+  c.paths.artifacts = RelPath.parse("build/out");
   assert.equal(
     ignoreBody(c, copies()),
-    "/build/.out/\n/.harness/\n/instructions/agent.db\n/instructions/agent.db-wal\n/instructions/agent.db-shm\n/instructions/agent.db-journal\n/.claude/skills/review/\n",
+    "/build/out/\n/.harness/\n/instructions/agent.db\n/instructions/agent.db-wal\n/instructions/agent.db-shm\n/instructions/agent.db-journal\n/instructions/*.md\n!/instructions/README.md\n/.claude/skills/review/\n",
   );
+  delete c.paths.artifacts;
+  assert.ok(!ignoreBody(c, []).includes("build/out"), "a disabled path is not ignored");
 });
 
 test("block keeps user rules and is idempotent", () => {
@@ -64,7 +66,7 @@ test("block keeps user rules and is idempotent", () => {
   step();
   const text = () => fs.readFileSync(path.join(p.dir, ".gitignore"), "utf8");
   assert.ok(
-    text().startsWith("target/\n*.log\n\n# agent-harness:begin agent-harness\n/.output/\n"),
+    text().startsWith("target/\n*.log\n\n# agent-harness:begin agent-harness\n/.artifacts/\n"),
   );
   assert.equal(step().applyId, undefined);
   assert.equal(text().split("agent-harness:begin").length - 1, 1);
@@ -82,7 +84,11 @@ test("generated rules ignore what they should in real Git", { skip: !hasGit }, (
   assert.deepEqual(r.excludedShared, []);
   // Spot-check the rules with Git itself.
   for (const [file, ignored] of [
-    [".output/x", true],
+    [".artifacts/x", true],
+    ["instructions/0001_x.md", true],
+    ["instructions/README.md", false],
+    ["instructions/.completed/u.md", false],
+    ["instructions/.gitkeep", false],
     [".harness/state.json", true],
     ["instructions/agent.db-wal", true],
     ["instructions/agent-db.sh", false],
@@ -105,6 +111,8 @@ test("reports parent rules, tracked files and empty dirs", { skip: !hasGit }, ()
   repo.write("proj/.harness/state.json", "{}");
   repo.git("add", "-f", "proj/.harness/state.json");
   repo.write("proj/references/a.md", "x");
+  // Only existing empty directories get a note; new ones get a `.gitkeep`.
+  fs.mkdirSync(path.join(repo.dir, "proj/instructions/.completed"), { recursive: true });
   const r = gitReport(new ProjectRoot(path.join(repo.dir, "proj")), config(), copies());
   assert.ok(
     r.excludedShared.some((e) => e.startsWith("references: excluded by")),

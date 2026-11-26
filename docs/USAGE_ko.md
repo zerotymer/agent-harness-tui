@@ -42,7 +42,7 @@ agent-harness-tui
 | 단계 | 하는 일 |
 | --- | --- |
 | 1. 에이전트 | 설치된 에이전트를 확인하고, 구성할 에이전트를 고르고, 없는 에이전트를 설치한다("에이전트" 참고). 고른 에이전트마다 **복사**(에이전트가 찾는 위치로 스킬 복사) 또는 **참조**(지침에서 `.skills/` 안내) 중 하나를 고른다. 심볼릭 링크 배치는 이유와 함께 선택 불가로 표시된다. 고른 에이전트 중 하나 이상이 설치되어 있어야 다음으로 간다. |
-| 2. 경로·백로그 | 참조 문서 폴더(기본 `references/`), 산출물 폴더(기본 `.output/`, 이름은 `.`으로 시작), 지시서 폴더(기본 `instructions/`, `.completed/`와 `completed.log`가 그 아래에 생김)를 정한다. 선택 사항인 `agent.db` 백로그 사용 여부를 고른다. 사용하면 지시서 폴더에 `agent.db`, `agent-db.sh`, `agent-db.ps1`이 생긴다(기존 DB는 그대로 둔다). 스크립트를 쓰려면 `sqlite3` CLI가 필요하다. 인자 없이 실행하면 명령 목록이 나오고, `AGENT_DB_ACTOR`를 설정하면 변경자가 기록된다. 고정 경로는 목록으로 보여 주지만 바꿀 수 없다. |
+| 2. 경로·백로그 | 지시서 폴더(필수, 기본 `instructions/`, `.completed/`와 `completed.log`가 그 아래에 생김), 임시 산출물 폴더(기본 `.artifacts/`, Git 제외), 산출물(문서) 폴더(기본 `docs/`), 참조 문서 폴더(기본 `references/`)를 정한다. 이름 형식은 강제하지 않으며, 앞의 `.`은 폴더를 숨길 뿐이다. 선택 폴더를 비우면 사용하지 않는다: 만들지 않고, `.gitignore`와 지침에도 적지 않는다. 초깃값은 `project.json`의 `paths`에서 오며 `null`이면 사용 안 함으로 시작한다. TUI는 폴더를 만들기만 하므로, 경로를 바꿔도 예전 폴더는 그대로 남는다. 선택 사항인 `agent.db` 백로그 사용 여부를 고른다. 사용하면 지시서 폴더에 `agent.db`, `agent-db.sh`, `agent-db.ps1`이 생긴다(기존 DB는 그대로 둔다). 스크립트를 쓰려면 `sqlite3` CLI가 필요하다. 인자 없이 실행하면 명령 목록이 나오고, `AGENT_DB_ACTOR`를 설정하면 변경자가 기록된다. 고정 경로는 목록으로 보여 주지만 바꿀 수 없다. |
 | 3. 소스·스킬 | 필요하면 프로젝트 안의 로컬 폴더나 위키 게이트웨이에서 스킬을 추가한다. "스킬 소스" 참고. |
 | 4. 미리보기 | 모든 디렉터리와 파일을 생성·갱신·변경 없음·보존·충돌(CONFLICT)로 표시해 보여 주고, Git 경고도 함께 보여 준다. 아직 아무것도 쓰지 않은 상태다. |
 | 5. 적용·결과 | 미리보기에서 Enter를 누르면 적용한다. 결과 화면에는 생성·갱신·변경 없음·보존 항목과 백업 폴더가 나온다. |
@@ -53,16 +53,18 @@ agent-harness-tui
 
 | 경로 | 용도 | Git |
 | --- | --- | --- |
-| `instructions/`, `instructions/.completed/` | 작업 지시서 (지시서 루트, 2단계에서 변경 가능) | 추적 |
+| `instructions/`, `instructions/.completed/` | 작업 지시서 (지시서 루트, 2단계에서 변경 가능) | 추적. 단 루트 바로 아래 `instructions/*.md`는 제외(진행 중 지시서는 로컬에만, `README.md`는 추적) |
 | `instructions/completed.log` | 완료 로그. 없을 때만 빈 파일로 만들고, 고쳐 쓰지 않음 | 추적 |
-| `references/` (변경 가능) | 참조 문서 | 추적 |
+| `docs/` (변경 가능, 선택) | 사용자가 공개하는 문서. 주로 HTML과 문서 | 추적 |
+| `references/` (변경 가능, 선택) | 에이전트용 문서 | 추적 |
+| `.gitkeep` | 도구가 새로 만든 추적 폴더마다 두는 빈 파일. Git이 빈 폴더를 유지하게 함. 덮어쓰지 않고 소유하지 않음 | 추적 |
 | `.skills/<id>/` | 공유 스킬 패키지 | 추적 |
 | `AGENTS.md`, `AGENTS_ko.md` (Codex) / `CLAUDE.md`, `CLAUDE_ko.md` (Claude Code) | 관리 지침 블록. 나머지 내용은 사용자 소유 | 추적 |
 | `.claude/skills/<id>/`, `.agents/skills/<id>/` | 복사 배치를 고른 에이전트의 스킬 복사본 | 제외 (다시 생성됨) |
 | `harness.toml`, `harness.lock.json` | 공유 설정과 확정된 가져오기 | 추적 |
 | `.harness/state.json`, `.harness/backups/` | 로컬 적용 상태와 백업 | 제외 |
 | `.harness/local.toml` | 선택 사항인 게이트웨이 토큰(Unix에서는 소유자만 접근) | 제외 |
-| `.output/` (변경 가능) | 임시 산출물. 로컬 전용이며 공유하지 않음. 다시 입력으로 읽지 않음 | 제외 |
+| `.artifacts/` (변경 가능, 선택) | 사용자와 소통하기 위한 임시 산출물. 공유하지 않으며 다시 입력으로 읽지 않음. Windows에서 이름이 `.`으로 시작하는 새 폴더는 숨김 속성도 시도하고, 실패는 알리기만 함 | 제외 |
 | `.gitignore` | 위 제외 규칙을 담은 관리 블록. 사용자의 다른 규칙은 그대로 둠 | 추적 |
 
 도구는 기존 파일을 `agent-harness:begin`으로 시작해 `agent-harness:end`로 끝나는 관리 블록 안에서만 바꾼다. 마커가 손상됐거나 사용자가 블록 안을 수정했다면 미리보기에서 충돌로 표시하고, 파일 전체를 다시 쓰지 않는다. 파일 형식은 [`references/HARNESS_STATE_CONTRACT_ko.md`](../references/HARNESS_STATE_CONTRACT_ko.md)에 정리되어 있다.
@@ -116,6 +118,8 @@ npx skills add <source> [-s <skill>]
 skills CLI 1.9.0으로 확인함(2026-11-23): 빈 프로젝트에서 `npx skills add anthropics/skills@<커밋 SHA> -s pdf`를 실행하자 `.agents/skills/pdf`가 설치되고, `.claude/skills/pdf`에 링크되었으며, `skills-lock.json`에 커밋이 기록되었다. 이 실행은 코딩 에이전트 안에서 했고, 그 환경에서는 CLI가 질문하지 않는다. 일반 터미널에서의 대화형 질문은 아직 수동으로 확인해야 한다.
 
 ## 다시 실행할 때
+
+스키마 1로 쓴 `harness.toml`(`output` 사용)도 읽는다. `output`은 값 그대로 `artifacts`가 되므로 기존 `.output/`을 계속 쓴다. 지금은 초기화된 프로젝트가 검증 전용이라, 파일을 스키마 2로 다시 쓰는 것은 이후의 적용 때다.
 
 `harness.toml`이 있으면 요약을 보여 주고, 파일이 설정과 일치하는지 검증한다. 이 모드에서는 변경을 적용하지 않는다. 스킬 추가·갱신은 이후 단계 기능이다. 같은 초기화를 반복해도 블록, 스킬, ignore 규칙이 중복되지 않는다.
 

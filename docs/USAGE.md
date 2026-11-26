@@ -42,7 +42,7 @@ agent-harness-tui
 | Step | What you do |
 | --- | --- |
 | 1. Agents | See which agents are installed, select the ones to set up, and install missing ones (see "Agents"). For each selected agent pick **copy** (skills are copied where the agent discovers them) or **reference** (guidance points to `.skills/`). Symlink placement is shown as unavailable, with the reason. You can continue once at least one selected agent is installed. |
-| 2. Paths and backlog | Set the reference folder (default `references/`), the output folder (default `.output/`; its name must start with `.`), and the instruction folder (default `instructions/`; `.completed/` and `completed.log` go under it). Turn the optional `agent.db` backlog on or off. When it is on, `agent.db`, `agent-db.sh` and `agent-db.ps1` are created in the instruction folder (an existing database is kept). The scripts need the `sqlite3` CLI. Run one without arguments to list its commands, and set `AGENT_DB_ACTOR` to record who made each change. Fixed paths are listed but cannot be changed. |
+| 2. Paths and backlog | Set the instruction folder (required, default `instructions/`; `.completed/` and `completed.log` go under it), the artifacts folder (default `.artifacts/`, ignored by Git), the documents folder (default `docs/`) and the reference folder (default `references/`). Any name is accepted; the leading `.` only hides a folder. Leave an optional folder empty to disable it: it is not created, ignored or mentioned in guidance. Initial values come from `paths` in `project.json` (`null` starts a path disabled). The TUI only creates folders: after a change the old folder stays where it is. Turn the optional `agent.db` backlog on or off. When it is on, `agent.db`, `agent-db.sh` and `agent-db.ps1` are created in the instruction folder (an existing database is kept). The scripts need the `sqlite3` CLI. Run one without arguments to list its commands, and set `AGENT_DB_ACTOR` to record who made each change. Fixed paths are listed but cannot be changed. |
 | 3. Sources and skills | Optionally add skills from a local folder inside the project, or from the wiki gateway. See "Skill sources". |
 | 4. Preview | See every directory and file, each marked create, update, unchanged, preserve or CONFLICT, together with Git warnings. Nothing has been written yet. |
 | 5. Apply and result | Press Enter on the preview to apply. The result lists what was created, updated, unchanged and preserved, and the backup folder. |
@@ -53,16 +53,18 @@ Keys: ↑↓ move, Space toggles, Enter goes to the next step (on steps 1 and 3 
 
 | Path | Purpose | Git |
 | --- | --- | --- |
-| `instructions/`, `instructions/.completed/` | Work instructions (instruction root, configurable on step 2) | Track |
+| `instructions/`, `instructions/.completed/` | Work instructions (instruction root, configurable on step 2) | Track, except `instructions/*.md` directly in the root (active instructions stay local; `README.md` is tracked) |
 | `instructions/completed.log` | Completion log; created empty only if missing, never rewritten | Track |
-| `references/` (configurable) | Reference documents | Track |
+| `docs/` (configurable, optional) | Documents you publish, mostly HTML and documents | Track |
+| `references/` (configurable, optional) | Documents for agents | Track |
+| `.gitkeep` | Empty file in each tracked folder the tool creates, so Git keeps it; never overwritten, not owned | Track |
 | `.skills/<id>/` | Shared skill packages | Track |
 | `AGENTS.md`, `AGENTS_ko.md` (Codex) / `CLAUDE.md`, `CLAUDE_ko.md` (Claude Code) | A managed guidance block; the rest of each file is yours | Track |
 | `.claude/skills/<id>/`, `.agents/skills/<id>/` | Skill copies for agents set to copy placement | Ignore (regenerated) |
 | `harness.toml`, `harness.lock.json` | Shared settings and resolved imports | Track |
 | `.harness/state.json`, `.harness/backups/` | Local applied state and backups | Ignore |
 | `.harness/local.toml` | Optional gateway token (owner-only permissions on Unix) | Ignore |
-| `.output/` (configurable) | Temporary local output, not shared; never read back as input | Ignore |
+| `.artifacts/` (configurable, optional) | Temporary artifacts for talking with the user, not shared; never read back as input. On Windows a new one whose name starts with `.` is also marked hidden; a failure is only reported | Ignore |
 | `.gitignore` | A managed block with the ignore rules above; your other rules are kept | Track |
 
 The tool changes existing files only inside managed blocks that start with `agent-harness:begin` and end with `agent-harness:end`. If the markers are damaged, or you edited inside a block, the preview shows a conflict, and the tool never rewrites the whole file. File formats are documented in [`references/HARNESS_STATE_CONTRACT.md`](../references/HARNESS_STATE_CONTRACT.md).
@@ -116,6 +118,8 @@ npx skills add <source> [-s <skill>]
 Checked with skills CLI 1.9.0 (2026-11-23): `npx skills add anthropics/skills@<commit-sha> -s pdf` in an empty project installed `.agents/skills/pdf`, linked it into `.claude/skills/pdf`, and recorded the commit in `skills-lock.json`. That run was inside a coding agent, where the CLI does not prompt; the interactive prompts in a normal terminal still need a manual check.
 
 ## Running again
+
+A `harness.toml` written with schema 1 (with `output`) is still read: `output` becomes `artifacts` with the same value, so an existing `.output/` stays in use. Because an initialized project is check-only for now, the file is rewritten as schema 2 only by a later apply.
 
 When `harness.toml` exists, the tool shows a summary and checks whether the files still match the settings. It never applies changes in this mode. Adding or updating skills comes in a later stage. Running the same initialization again never duplicates blocks, skills or ignore rules.
 

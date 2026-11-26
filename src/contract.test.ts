@@ -112,7 +112,7 @@ test("instructions dir defaults when absent", () => {
 
 test("version is checked before fields", () => {
   // A newer file with unknown fields reports the version, not the fields.
-  const newer = "schema_version = 2\nfuture_key = true\n";
+  const newer = "schema_version = 3\nfuture_key = true\n";
   assert.equal(
     errorKind(() => fromText(HARNESS_CONFIG, newer)),
     "unsupported-version",

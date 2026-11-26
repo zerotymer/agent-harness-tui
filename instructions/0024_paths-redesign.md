@@ -1,7 +1,7 @@
 # 0024 — 표준 경로 재정의: 경로 자유 지정, `.artifacts/`, `.gitkeep`, 지시서 Git 규칙
 
 > Entity UUID: 01a20b6e-8b1a-74c2-babb-d819de45ac39   (로컬 생성, UUIDv7)
-> Status: TODO
+> Status: IN_PROGRESS
 > Branch: `feature/paths-redesign/01a20b6e`
 > 근거: 상위 지시서 `0022_flow-redesign.md` 2·3번, 이슈 #36, 2026-11-24 사용자 결정
 > 선행: 0025 (Node 이식), 0023 (카탈로그 v2 로더의 `paths` 초깃값을 쓴다). Node로 구현한다

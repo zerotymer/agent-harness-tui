@@ -67,8 +67,10 @@ export async function planItems(
  * both languages.
  */
 export function render(config: HarnessConfig, group: AgentEntry[], lang: Lang): string {
+  // Disabled optional paths are not mentioned.
   const refs = config.paths.references;
-  const out = config.paths.output;
+  const docs = config.paths.docs;
+  const out = config.paths.artifacts;
   const layout = configLayout(config);
   const inst = layout.instructions;
   const done = completedDir(layout);
@@ -76,6 +78,10 @@ export function render(config: HarnessConfig, group: AgentEntry[], lang: Lang): 
   const skills = skillsDir();
   const db = config.backlog.path;
 
+  const tracked = [docs, refs]
+    .filter((p) => p !== undefined)
+    .map((p) => `\`${p}/\`, `)
+    .join("");
   const lines: string[] = [];
   const push = (en: string, ko: string = en) => lines.push(lang === "en" ? en : ko);
 
@@ -95,15 +101,28 @@ export function render(config: HarnessConfig, group: AgentEntry[], lang: Lang): 
     `- \`${done}/<UUID>.md\`: 완료된 지시서.`,
   );
   push(`- \`${log}\`: completion log, append-only.`, `- \`${log}\`: 완료 로그, 추가만 가능.`);
-  push(`- \`${refs}/\`: reference documents.`, `- \`${refs}/\`: 참조 문서.`);
+  if (docs) {
+    push(
+      `- \`${docs}/\`: documents published by the user, mostly HTML and documents.`,
+      `- \`${docs}/\`: 사용자가 공개하는 문서. 주로 HTML과 문서다.`,
+    );
+  }
+  if (refs) {
+    push(
+      `- \`${refs}/\`: documents for agents: Markdown files or documents the user adds.`,
+      `- \`${refs}/\`: 에이전트용 문서. Markdown 파일이나 사용자가 추가한 문서.`,
+    );
+  }
   push(
     `- \`${skills}/<id>/\`: canonical skill packages. Read \`SKILL.md\` there when its topic comes up; listing a path here does not make an agent discover it automatically.`,
     `- \`${skills}/<id>/\`: 스킬 원본 패키지. 관련 주제가 나오면 해당 위치의 \`SKILL.md\`를 읽는다. 여기에 경로를 적는다고 에이전트가 자동으로 찾는 것은 아니다.`,
   );
-  push(
-    `- \`${out}/\`: temporary output, local only and not shared. One-way: never read it back as input. Not tracked by Git.`,
-    `- \`${out}/\`: 임시 산출물. 로컬 전용이며 공유하지 않는다. 단방향이며 다시 입력으로 읽지 않는다. Git으로 추적하지 않는다.`,
-  );
+  if (out) {
+    push(
+      `- \`${out}/\`: temporary artifacts for talking with the user, local only and not shared. One-way: never read it back as input. Not tracked by Git.`,
+      `- \`${out}/\`: 사용자와 소통하기 위한 임시 산출물. 로컬 전용이며 공유하지 않는다. 단방향이며 다시 입력으로 읽지 않는다. Git으로 추적하지 않는다.`,
+    );
+  }
   if (config.backlog.enabled) {
     const sh = inst.join(backlog.SH_FILE);
     const ps1 = inst.join(backlog.PS1_FILE);
@@ -159,12 +178,16 @@ export function render(config: HarnessConfig, group: AgentEntry[], lang: Lang): 
   push("### Git");
   push("");
   push(
-    `- Track \`${inst}/\` (with \`${done}/\` and \`${log}\`), \`${refs}/\`, \`${skills}/\`, \`harness.toml\`, \`harness.lock.json\` and the root guidance files.`,
-    `- 추적: \`${inst}/\`(\`${done}/\`와 \`${log}\` 포함), \`${refs}/\`, \`${skills}/\`, \`harness.toml\`, \`harness.lock.json\`, 루트 지침 파일.`,
+    `- Track \`${done}/\`, \`${log}\`, ${tracked}\`${skills}/\`, \`harness.toml\`, \`harness.lock.json\` and the root guidance files.`,
+    `- 추적: \`${done}/\`, \`${log}\`, ${tracked}\`${skills}/\`, \`harness.toml\`, \`harness.lock.json\`, 루트 지침 파일.`,
   );
   push(
-    `- Ignore \`${out}/\`, \`.harness/\` and \`${db}\`, \`${db}-wal\`, \`${db}-shm\`, \`${db}-journal\`. Never put credentials in tracked files.`,
-    `- 제외: \`${out}/\`, \`.harness/\`, \`${db}\`, \`${db}-wal\`, \`${db}-shm\`, \`${db}-journal\`. 인증 정보는 추적 파일에 넣지 않는다.`,
+    `- Active instruction files are local: \`${inst}/*.md\` is ignored except \`${inst}/README.md\`. Files below \`${inst}/\` stay tracked.`,
+    `- 진행 중인 지시서는 로컬에만 둔다: \`${inst}/*.md\`는 무시하고 \`${inst}/README.md\`만 추적한다. \`${inst}/\` 아래 하위 폴더의 파일은 추적한다.`,
+  );
+  push(
+    `- Ignore ${out ? `\`${out}/\`, ` : ""}\`.harness/\` and \`${db}\`, \`${db}-wal\`, \`${db}-shm\`, \`${db}-journal\`. Never put credentials in tracked files.`,
+    `- 제외: ${out ? `\`${out}/\`, ` : ""}\`.harness/\`, \`${db}\`, \`${db}-wal\`, \`${db}-shm\`, \`${db}-journal\`. 인증 정보는 추적 파일에 넣지 않는다.`,
   );
   push("");
 

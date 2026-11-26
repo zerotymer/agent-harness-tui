@@ -24,7 +24,7 @@ import { PathError, type ProjectRoot, RelPath } from "./paths.js";
 
 export const APPLY_LOCK = ".harness/apply.lock";
 
-const TOOL_VERSION: string = JSON.parse(
+export const TOOL_VERSION: string = JSON.parse(
   fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ).version;
 

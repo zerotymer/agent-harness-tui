@@ -65,6 +65,8 @@ The project root and the configuration source are shown in the header on every s
 - `harness.toml` stores the selected agent IDs. The guidance file name and the skills directory come from the agent entry. The IDs `claude-code` and `codex` from Stage 1 stay valid, so this needs no schema change.
 - If an agent ID in `harness.toml` is missing from the configuration, keep it in `harness.toml`, show it as unknown, and do not deploy to it.
 - There is no separate root screen. The project root is shown in the header.
+- An initialized project (`harness.toml` exists), or one whose files or configuration cannot be read, shows a summary and a no-change check in place of the agents screen and applies nothing (decided 2026-11-26). Changing an initialized harness comes with the guidance and updater work.
+- An invalid `project.json` is shown as an error on that screen; the TUI does not start the flow with `default.json` instead.
 
 ## 4. Paths
 

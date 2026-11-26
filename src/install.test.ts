@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
-import { parse, SKILLS, SKILLS_CLI, type SkillsEntry } from "./catalog.js";
+import { parse, SKILLS_CLI, type SkillsEntry } from "./catalog.js";
 import { args, conflict, display, findProgram, NPX, run, spawnFor } from "./install.js";
 
 const temps: string[] = [];
@@ -47,8 +47,8 @@ test("option-like values are rejected by the catalog", () => {
     ["-x", "pdf"],
     ["o/r", "--global"],
   ]) {
-    const text = `{"schema_version":1,"kind":"skills","entries":[{"id":"x","installer":"skills-cli","source":"${source}","skill":"${skill}","title":{"en":"x"}}]}`;
-    assert.throws(() => parse(SKILLS, text), `${source} ${skill}`);
+    const text = `{"schema_version":2,"skills":[{"id":"x","installer":"skills-cli","source":"${source}","skill":"${skill}","title":{"en":"x"}}]}`;
+    assert.throws(() => parse(text), `${source} ${skill}`);
   }
 });
 
@@ -67,6 +67,15 @@ test("finds programs on the PATH only", () => {
   assert.equal(findProgram(NPX, p), path.join(d, NPX));
   assert.equal(findProgram("no-such-runner", p), undefined);
   assert.equal(findProgram(NPX, undefined), undefined);
+});
+
+test("Windows lookup tries PATHEXT extensions (all OSes)", () => {
+  const d = tempDir();
+  fs.writeFileSync(path.join(d, "tool.cmd"), "");
+  const p = `C:\\nowhere;${d}`;
+  assert.equal(findProgram("tool", p, "win32", ".EXE;.CMD"), path.join(d, "tool.cmd"));
+  assert.equal(findProgram("tool", p, "win32", ".EXE"), undefined);
+  assert.equal(findProgram("tool", d, "linux"), undefined, "no PATHEXT outside Windows");
 });
 
 test("batch files go through cmd.exe only with safe arguments (all OSes)", () => {

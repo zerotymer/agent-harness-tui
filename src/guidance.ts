@@ -9,50 +9,64 @@
 import { createOnly, type Desired } from "./apply.js";
 import * as backlog from "./backlog.js";
 import * as blocks from "./blocks.js";
-import { type AgentId, configLayout, type HarnessConfig } from "./contract.js";
+import { type AgentEntry, agentTitle, builtinAgents, knownAgents } from "./catalog.js";
+import { configLayout, type HarnessConfig } from "./contract.js";
 import { completedDir, completedLog, type ProjectRoot, RelPath, skillsDir } from "./paths.js";
-import { agentName, skillsDir as agentSkillsDir } from "./placement.js";
 
 export const BLOCK_ID = "agent-harness";
 
 export type Lang = "en" | "ko";
 
-/** Guidance files for an agent: English first, then Korean. */
-export function guidanceFiles(agent: AgentId): [Lang, RelPath][] {
-  // Plural on purpose: `AGENTS.md`, never `AGENT.md`.
-  const base = agent === "codex" ? "AGENTS" : "CLAUDE";
+/** Guidance files for an agent: English first, then Korean (`<name>_ko.md`). */
+export function guidanceFiles(agent: AgentEntry): [Lang, RelPath][] {
+  const base = agent.guidance.slice(0, -".md".length);
   return [
-    ["en", RelPath.unchecked(`${base}.md`)],
+    ["en", RelPath.unchecked(agent.guidance)],
     ["ko", RelPath.unchecked(`${base}_ko.md`)],
   ];
 }
 
+/** Known configured agents grouped by guidance file (ignoring case), in config order. */
+export function groupByGuidance(config: HarnessConfig, agents: AgentEntry[]): AgentEntry[][] {
+  const groups: AgentEntry[][] = [];
+  for (const [, e] of knownAgents(config.agents, agents)) {
+    const g = groups.find((x) => x[0]?.guidance.toLowerCase() === e.guidance.toLowerCase());
+    if (g) g.push(e);
+    else groups.push([e]);
+  }
+  return groups;
+}
+
 /**
  * Directories and files to plan: instruction dirs, a create-only empty
- * log, the backlog when enabled, and one managed block per guidance file of
- * each selected agent.
+ * log, the backlog when enabled, and one managed block per guidance file.
+ * Agents that share a guidance file share one block.
  */
 export async function planItems(
   root: ProjectRoot,
   config: HarnessConfig,
+  agents: AgentEntry[] = builtinAgents(),
 ): Promise<[RelPath[], Desired[]]> {
   const layout = configLayout(config);
   const dirs = [layout.instructions, completedDir(layout)];
   // Never truncates an existing log and records no init event.
   const desired = [createOnly(completedLog(layout), ""), ...(await backlog.planItems(config))];
-  const seen = new Set<AgentId>();
-  for (const { id } of config.agents) {
-    if (seen.has(id)) continue;
-    seen.add(id);
-    for (const [lang, file] of guidanceFiles(id)) {
-      desired.push(blocks.desired(root, file, "markdown", BLOCK_ID, render(config, id, lang)));
+  for (const group of groupByGuidance(config, agents)) {
+    const [first] = group;
+    if (!first) continue;
+    for (const [lang, file] of guidanceFiles(first)) {
+      desired.push(blocks.desired(root, file, "markdown", BLOCK_ID, render(config, group, lang)));
     }
   }
   return [dirs, desired];
 }
 
-/** Block body for one agent. Every code span appears in both languages. */
-export function render(config: HarnessConfig, agent: AgentId, lang: Lang): string {
+/**
+ * Block body for the agents sharing one guidance file. Agent-specific text
+ * goes at the bottom under each agent's title. Every code span appears in
+ * both languages.
+ */
+export function render(config: HarnessConfig, group: AgentEntry[], lang: Lang): string {
   const refs = config.paths.references;
   const out = config.paths.output;
   const layout = configLayout(config);
@@ -156,19 +170,6 @@ export function render(config: HarnessConfig, agent: AgentId, lang: Lang): strin
 
   push("### Skills", "### 스킬");
   push("");
-  const name = agentName(agent);
-  const copies = agentSkillsDir(agent);
-  if (config.agents.find((a) => a.id === agent)?.placement === "copy") {
-    push(
-      `- ${name}: each skill is copied from \`${skills}/<id>/\` to \`${copies}/<id>/\`, where ${name} discovers it. Edit \`${skills}/\`, not the copies: copies are regenerated and not tracked by Git.`,
-      `- ${name}: 각 스킬은 \`${skills}/<id>/\`에서 \`${copies}/<id>/\`로 복사되며, ${name}는 그 위치에서 스킬을 찾는다. 복사본이 아니라 \`${skills}/\`를 편집한다. 복사본은 다시 생성되며 Git으로 추적하지 않는다.`,
-    );
-  } else {
-    push(
-      `- ${name}: skills are referenced, not copied. ${name} does not discover \`${skills}/\` automatically; read \`${skills}/<id>/SKILL.md\` when its topic comes up.`,
-      `- ${name}: 스킬을 복사하지 않고 참조한다. ${name}는 \`${skills}/\`를 자동으로 찾지 않으므로, 관련 주제가 나오면 \`${skills}/<id>/SKILL.md\`를 읽는다.`,
-    );
-  }
   if (config.skills.length === 0) {
     push("- None selected yet.", "- 아직 선택한 스킬이 없다.");
   } else {
@@ -177,6 +178,25 @@ export function render(config: HarnessConfig, agent: AgentId, lang: Lang): strin
     for (const s of config.skills) push(`| ${s.id} | \`${skills}/${s.id}/\` |`);
   }
   push("");
+
+  for (const agent of group) {
+    const name = agentTitle(agent);
+    const copies = agent.skillsDir;
+    push(`### ${name}`);
+    push("");
+    if (config.agents.find((a) => a.id === agent.id)?.placement === "copy") {
+      push(
+        `- Each skill is copied from \`${skills}/<id>/\` to \`${copies}/<id>/\`, where ${name} discovers it. Edit \`${skills}/\`, not the copies: copies are regenerated and not tracked by Git.`,
+        `- 각 스킬은 \`${skills}/<id>/\`에서 \`${copies}/<id>/\`로 복사되며, ${name}는 그 위치에서 스킬을 찾는다. 복사본이 아니라 \`${skills}/\`를 편집한다. 복사본은 다시 생성되며 Git으로 추적하지 않는다.`,
+      );
+    } else {
+      push(
+        `- Skills are referenced, not copied. ${name} does not discover \`${skills}/\` automatically; read \`${skills}/<id>/SKILL.md\` when its topic comes up.`,
+        `- 스킬을 복사하지 않고 참조한다. ${name}는 \`${skills}/\`를 자동으로 찾지 않으므로, 관련 주제가 나오면 \`${skills}/<id>/SKILL.md\`를 읽는다.`,
+      );
+    }
+    push("");
+  }
   push(
     "This guidance states policy. It does not enforce file system or command permissions by itself.",
     "이 지침은 정책을 표현할 뿐이며, 파일 시스템·명령 실행 권한을 그 자체로 강제하지 않는다.",

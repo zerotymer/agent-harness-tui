@@ -2,7 +2,7 @@
 
 `agent-harness-tui` is a terminal wizard that sets up an agent harness in the project you run it from. It creates instruction folders, agent guidance (`AGENTS.md`, `CLAUDE.md` and their `_ko.md` pairs), shared skills under `.skills/`, and a `.gitignore` block. Every change is previewed first and written only when you confirm.
 
-This document covers Stage 1, initial creation, and the Stage 2 catalogs: viewing the three built-in catalogs, installing public skills with the skills CLI, and listing documents. Updating an existing harness is Stage 3.
+This document covers Stage 1, initial creation, and the parts of Stage 2 implemented so far: the project configuration (`project.json` or the built-in default), agent detection and install, installing public skills with the skills CLI, and listing wiki skills, documents and hooks. Updating an existing harness comes later.
 
 ## Install
 
@@ -32,21 +32,22 @@ agent-harness-tui
 ```
 
 - The current directory is the project root. The tool never searches parent directories, never switches branches, and never runs `git init`.
+- Every screen shows a header with the project root and the configuration in use (`project.json`, or the built-in `default.json`, with its `catalog_version`).
 - It needs an interactive terminal on both stdin and stdout. Otherwise it exits immediately with code 2 instead of waiting.
 - `agent-harness-tui --version` prints the version, and `--help` prints usage.
+- An already initialized project (with `harness.toml`) only shows a summary and a no-change check (see "Running again").
 
-## The six steps
+## The five steps
 
 | Step | What you do |
 | --- | --- |
-| 1. Root and settings | Check the project root. An already initialized project only shows a summary and a no-change check (see below). |
+| 1. Agents | See which agents are installed, select the ones to set up, and install missing ones (see "Agents"). For each selected agent pick **copy** (skills are copied where the agent discovers them) or **reference** (guidance points to `.skills/`). Symlink placement is shown as unavailable, with the reason. You can continue once at least one selected agent is installed. |
 | 2. Paths and backlog | Set the reference folder (default `references/`), the output folder (default `.output/`; its name must start with `.`), and the instruction folder (default `instructions/`; `.completed/` and `completed.log` go under it). Turn the optional `agent.db` backlog on or off. When it is on, `agent.db`, `agent-db.sh` and `agent-db.ps1` are created in the instruction folder (an existing database is kept). The scripts need the `sqlite3` CLI. Run one without arguments to list its commands, and set `AGENT_DB_ACTOR` to record who made each change. Fixed paths are listed but cannot be changed. |
-| 3. Agents and placement | Choose Claude Code and/or Codex. For each, pick **copy** (skills are copied where the agent discovers them) or **reference** (guidance points to `.skills/`). Symlink placement is shown as unavailable, with the reason. |
-| 4. Sources and skills | Optionally add skills from a local folder inside the project, or from the wiki gateway. See "Skill sources". |
-| 5. Preview | See every directory and file, each marked create, update, unchanged, preserve or CONFLICT, together with Git warnings. Nothing has been written yet. |
-| 6. Apply and result | Press Enter on the preview to apply. The result lists what was created, updated, unchanged and preserved, and the backup folder. |
+| 3. Sources and skills | Optionally add skills from a local folder inside the project, or from the wiki gateway. See "Skill sources". |
+| 4. Preview | See every directory and file, each marked create, update, unchanged, preserve or CONFLICT, together with Git warnings. Nothing has been written yet. |
+| 5. Apply and result | Press Enter on the preview to apply. The result lists what was created, updated, unchanged and preserved, and the backup folder. |
 
-Keys: ↑↓ move, Space toggles, Enter goes to the next step (on step 4 it runs the focused button), Esc goes back (on the first step it quits), Ctrl+C cancels, and `q` quits outside text fields. PgUp/PgDn scroll the preview. Korean text can be typed in path and name fields. The screen adapts to resizing, and below 80 columns the step list folds into one line.
+Keys: ↑↓ move, Space toggles, Enter goes to the next step (on steps 1 and 3 it runs the focused button), Esc goes back (on the agents step it quits), Ctrl+C cancels, and `q` quits outside text fields. PgUp/PgDn scroll the preview. Korean text can be typed in path and name fields. The screen adapts to resizing, and below 80 columns the step list folds into one line.
 
 ## What gets created
 
@@ -74,13 +75,27 @@ The tool changes existing files only inside managed blocks that start with `agen
   - **Type:** optional Wiki.js path prefix such as `skill` or `claude/hook`.
   - **Fetching:** enter a page UUID and press [조회] (fetch). The network is used only at that moment. The request times out after 15 seconds; the key bar shows 처리 중… (working) and other keys are ignored until the response arrives.
   - **Content:** English and Korean pages become `SKILL.md` and `SKILL_ko.md`, unchanged. If one language is missing, you must accept a partial import. The tool never creates a missing translation.
-  - **List:** [목록 불러오기] (load list) works for local folders only. Picking a wiki page from the wiki catalog is not supported; [카탈로그 보기] (view catalogs) lists the wiki entries with their UUIDs so you can type one in.
+  - **List:** [목록 불러오기] (load list) works for local folders only. Picking a wiki skill from the configuration list is not supported yet; [카탈로그 보기] (view catalogs) lists the wiki skills with their UUIDs so you can type one in.
 
-## Catalogs
+## Project configuration
 
-Three local JSON files list what you can pick: `wiki.json` (Wiki.js pages), `skills.json` (public skills) and `docs.json` (documents). Their format is in [`references/HARNESS_CATALOG_CONTRACT.md`](../references/HARNESS_CATALOG_CONTRACT.md). The tool never downloads a catalog; whoever distributes the tool also distributes the files.
+The TUI reads `project.json` from the project root. Without it, it reads `default.json`, which is built into the package (this repository's `catalog/default.json`). The two are never merged, and the TUI never downloads either. The format is in [`references/HARNESS_CATALOG_CONTRACT.md`](../references/HARNESS_CATALOG_CONTRACT.md): `agents`, `skills`, `wiki_skills`, `docs` and `hooks`, plus optional initial `paths` and `service` values.
 
-The catalogs are the samples bundled with the package (this repository's `catalog/`). A bundled file with an unknown key, the wrong `kind`, an unsupported `schema_version` or a duplicate `id` is shown as an error instead of being used. [카탈로그 보기] (view catalogs) on the skills step shows each catalog's origin and `catalog_version`. Wiki entries and documents are list only; public skills show available, unavailable (no `npx`), conflict or manual install. Instruction 0023 replaces these catalogs with the project configuration.
+A file with an unknown key, an unsupported `schema_version`, a duplicate `id`, an option-like value or an empty argument vector is rejected. An invalid `project.json` is shown as an error and the TUI does not fall back to `default.json`; fix the file and run again.
+
+[카탈로그 보기] (view catalogs) on the skills step shows the lists. Public skills show available, unavailable (no `npx`), conflict or manual install. Wiki skills, documents and hooks are listed only for now; importing them from the list and downloading documents come later.
+
+## Agents
+
+The agents come from `agents` in the configuration. The built-in default lists Claude Code (`claude --version`, `npm install -g @anthropic-ai/claude-code@latest`) and Codex (`codex --version`, `npm install -g @openai/codex`).
+
+- **Detection** runs each agent's `detect` command without a shell, all in parallel, with a 5-second timeout. Exit code 0 means installed, and the first output line is shown as the version. [다시 감지] (detect again) repeats it.
+- **Program lookup** uses `PATH` only. On Windows it also tries the `PATHEXT` extensions, so `npm` finds `npm.cmd`.
+- **Installing:** select the agents that are not detected and press [설치] (install). The confirmation screen shows the full command for each one on this OS. On Enter the TUI hands over the terminal and runs them one by one. When they finish, press Enter to return; the TUI shows each exit code and detects again. Anything other than 0 is a failure.
+- These are global npm installs: npm must be on `PATH`, Claude Code needs Node.js 22 or later, and an unwritable npm prefix fails with `EACCES`. The TUI never uses `sudo` or elevation. Shell installers (`curl … | bash`) are not supported.
+- An agent with no install command for this OS shows install as unavailable.
+- `harness.toml` stores the selected agent IDs. The guidance file and skills directory come from the agent entry. Agents that share a guidance file share one managed block, with each agent's own lines at the bottom under its title.
+- An agent ID in `harness.toml` that the configuration no longer lists is kept, shown as unknown, and gets no guidance or skill copies.
 
 ## Installing public skills
 
@@ -91,7 +106,7 @@ npx skills add <source> [-s <skill>]
 ```
 
 - `-s` is left out when the entry has no `skill` or `*`; the CLI then offers every skill in the source.
-- The TUI adds no `-a`, `-g` or `-y`. When you press Enter, the TUI screen closes and the terminal is handed to the skills CLI, which asks for the target agents, project or user scope, and skills itself. When it exits, the TUI comes back and shows the exit code; anything other than 0 is a failure.
+- The TUI adds no `-a`, `-g` or `-y`. When you press Enter, the TUI screen closes and the terminal is handed to the skills CLI, which asks for the target agents, project or user scope, and skills itself. When it exits, press Enter to return; the TUI shows the exit code, and anything other than 0 is a failure.
 - It runs without a shell in the project root (`npx.cmd` on Windows). If `npx` is not on `PATH`, installing shows as unavailable.
 - To pin a version, the catalog writes it into `source` in the CLI's syntax, for example `owner/repo@<commit-sha>`.
 - Name conflicts: if the entry's `skill` matches a skill the harness deployed or selected (ignoring case), the install is blocked. When installing every skill, names are not known in advance, so the screen warns that the check is unavailable.

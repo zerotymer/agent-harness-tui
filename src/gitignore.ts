@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Desired } from "./apply.js";
 import * as blocks from "./blocks.js";
+import { type AgentEntry, builtinAgents, knownAgents } from "./catalog.js";
 import { CONFIG_FILE, configLayout, type HarnessConfig, LOCK_FILE } from "./contract.js";
 import { guidanceFiles } from "./guidance.js";
 import { completedDir, completedLog, type ProjectRoot, RelPath, skillsDir } from "./paths.js";
@@ -40,7 +41,10 @@ export function desired(root: ProjectRoot, config: HarnessConfig, copies: RelPat
 }
 
 /** Paths the harness expects Git to track. */
-export function sharedPaths(config: HarnessConfig): RelPath[] {
+export function sharedPaths(
+  config: HarnessConfig,
+  agents: AgentEntry[] = builtinAgents(),
+): RelPath[] {
   const layout = configLayout(config);
   const v = [
     completedDir(layout),
@@ -51,8 +55,8 @@ export function sharedPaths(config: HarnessConfig): RelPath[] {
     RelPath.unchecked(CONFIG_FILE),
     RelPath.unchecked(LOCK_FILE),
   ];
-  for (const a of config.agents) {
-    for (const [, p] of guidanceFiles(a.id)) if (!v.some((o) => o.equals(p))) v.push(p);
+  for (const [, e] of knownAgents(config.agents, agents)) {
+    for (const [, p] of guidanceFiles(e)) if (!v.some((o) => o.equals(p))) v.push(p);
   }
   return v;
 }
@@ -77,6 +81,7 @@ export function gitReport(
   config: HarnessConfig,
   copies: RelPath[],
   git = "git",
+  agents: AgentEntry[] = builtinAgents(),
 ): GitReport {
   const r: GitReport = { excludedShared: [], trackedIgnored: [], notes: [] };
   const run = (...args: string[]) =>
@@ -95,7 +100,7 @@ export function gitReport(
 
   // Existing rules that would hide shared paths. `--no-index` also checks
   // paths that are already tracked.
-  const shared = sharedPaths(config).map(String);
+  const shared = sharedPaths(config, agents).map(String);
   for (const line of lines(run("check-ignore", "--no-index", "-v", "--", ...shared).stdout)) {
     // `<source>:<line>:<pattern>\t<path>`
     const tab = line.indexOf("\t");

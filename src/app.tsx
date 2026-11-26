@@ -1,5 +1,5 @@
 import { Box, type Key as InkKey, Text, useApp, useInput, useWindowSize } from "ink";
-import { useReducer } from "react";
+import { useEffect, useReducer } from "react";
 import * as install from "./install.js";
 import { type Key, STEPS, type Wizard } from "./tui.js";
 
@@ -24,6 +24,11 @@ export function App({ wizard: w }: { wizard: Wizard }) {
   const [, redraw] = useReducer((n: number) => n + 1, 0);
   const { columns, rows } = useWindowSize();
 
+  // Detect agents after the first draw so the screen never waits for it.
+  useEffect(() => {
+    if (w.step === "agents") void w.detect().then(redraw);
+  }, [w]);
+
   useInput((input, key) => {
     const k = toKey(input, key);
     if (!k) return;
@@ -31,16 +36,26 @@ export function App({ wizard: w }: { wizard: Wizard }) {
       const pending = w.key(k);
       redraw(); // show the busy state while a fetch runs
       await pending;
-      const req = w.takeRun();
-      if (req) {
-        // Hand the terminal to the skills CLI so its prompts reach the user.
-        await suspendTerminal(() => {
-          try {
-            w.finishRun({ ok: true, value: install.run(req, w.root.path) });
-          } catch (e) {
-            w.finishRun({ ok: false, error: (e as Error).message });
+      const run = w.takeRun();
+      if (run) {
+        // Hand the terminal over so the commands' prompts reach the user,
+        // one command after another, then wait for Enter before redrawing.
+        const results: Parameters<Wizard["finishRun"]>[1] = [];
+        await suspendTerminal(async () => {
+          for (const req of run.requests) {
+            console.log(`\n$ ${install.display(req)}`);
+            try {
+              results.push({ ok: true, value: install.run(req, w.root.path) });
+            } catch (e) {
+              results.push({ ok: false, error: (e as Error).message });
+            }
           }
+          await install.waitForEnter();
         });
+        w.busy = true;
+        redraw();
+        await w.finishRun(run, results);
+        w.busy = false;
       }
       if (w.quit) exit();
       else redraw();
@@ -48,8 +63,8 @@ export function App({ wizard: w }: { wizard: Wizard }) {
   });
 
   const current = w.stepIndex();
-  // Footer (3) + body borders and title (3); narrow layouts also show a step line.
-  const height = Math.max(3, rows - 7);
+  // Header (1) + footer (3) + body borders and title (3); narrow layouts add a step line.
+  const height = Math.max(3, rows - 8);
   const body = w.lines().slice(w.scroll, w.scroll + height);
   const main = (
     <Box flexDirection="column" borderStyle="single" flexGrow={1} height={height + 3}>
@@ -64,9 +79,10 @@ export function App({ wizard: w }: { wizard: Wizard }) {
   );
   return (
     <Box flexDirection="column" width={columns}>
+      <Text dimColor wrap="truncate-start">{`agent-harness-tui · ${w.header()}`}</Text>
       {columns >= 80 ? (
         <Box>
-          <Box flexDirection="column" borderStyle="single" width={18}>
+          <Box flexDirection="column" borderStyle="single" width={20}>
             {STEPS.map(([, name], i) => (
               <Text key={name} bold={i === current}>
                 {`${i === current ? "▸" : " "} ${i + 1} ${name}`}
@@ -77,7 +93,7 @@ export function App({ wizard: w }: { wizard: Wizard }) {
         </Box>
       ) : (
         <>
-          <Text>{`${current + 1}/6 ${STEPS[current]?.[1]}`}</Text>
+          <Text>{`${current + 1}/${STEPS.length} ${STEPS[current]?.[1]}`}</Text>
           {main}
         </>
       )}

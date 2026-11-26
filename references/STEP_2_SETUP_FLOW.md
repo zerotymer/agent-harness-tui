@@ -114,6 +114,7 @@ The `agent.db` rules from the Stage 1 spec §2 do not change.
 - Agents with the same guidance file are treated as one: the file gets one managed block. Content specific to one agent, if any, is added at the bottom of that block under the agent's title.
 - The block lists the enabled paths and their purpose, the instruction rules, the Git policy, the skills, and the dynamic skills and references with how to read them (§7).
 - Existing user text outside the block is kept, as in Stage 1.
+- **Refresh** (instruction 0027, 2026-11-26): on an initialized project, when the check finds no conflict but a guidance block differs from what the current configuration renders (a newer TUI, a renamed hook), the check screen offers [지침 갱신] (refresh guidance). It shows the preview and, after confirmation, rewrites the managed blocks only. Esc on the preview returns to the check without writing. A block the user edited is a conflict and is never rewritten.
 
 ## 6. Installs
 

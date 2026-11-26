@@ -5,6 +5,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { builtinText } from "./catalog.js";
 import { NPX } from "./install.js";
 import { loadToken } from "./local.js";
 import { ProjectRoot } from "./paths.js";
@@ -634,6 +635,47 @@ test("hooks are recorded and explained, never installed", async () => {
   const again = await p.wizard();
   assert.match(screen(again), /claude-code-hooks \(알 수 없음\)/);
   assert.match(p.read("harness.toml"), /claude-code-hooks/);
+});
+
+test("stale guidance blocks can be refreshed; user text is kept", async () => {
+  using p = project();
+  const w = await initialized(p);
+  await press(w, "down"); // [훅 추가]
+  await press(w, "enter");
+  await typed(w, " ");
+  await press(w, "enter");
+  w.focus = SK_KIND;
+  await press(w, "enter", 2); // preview, apply
+  assert.equal(w.step, "done", screen(w));
+  fs.appendFileSync(p.abs("CLAUDE.md"), "\nmy notes\n");
+
+  // Same configuration: verified, no refresh offered.
+  const same = await p.wizard();
+  assert.match(screen(same), /검증: 설정과 파일이 일치합니다/);
+  assert.equal(same.rows(), 2);
+
+  // The project configuration renames the hook: only the guidance differs.
+  const cfg = JSON.parse(builtinText());
+  cfg.hooks[0].title = { en: "Renamed hook", ko: "바뀐 훅" };
+  fs.writeFileSync(p.abs("project.json"), JSON.stringify(cfg));
+  const stale = await p.wizard();
+  assert.ok(stale.guidanceStale());
+  assert.match(screen(stale), /\[지침 갱신\]/);
+  await press(stale, "down", 2);
+  await press(stale, "enter");
+  assert.equal(stale.step, "preview");
+  await press(stale, "esc"); // back to the check, nothing written
+  assert.equal(stale.step, "verify");
+  assert.ok(stale.guidanceStale());
+  assert.doesNotMatch(p.read("CLAUDE.md"), /Renamed hook/);
+  stale.focus = 2;
+  await press(stale, "enter", 2); // preview, apply
+  assert.equal(stale.step, "done", screen(stale));
+  assert.match(p.read("CLAUDE.md"), /Renamed hook[\s\S]*my notes\n$/);
+  assert.match(p.read("CLAUDE_ko.md"), /바뀐 훅/);
+  const after = await p.wizard();
+  assert.match(screen(after), /검증: 설정과 파일이 일치합니다/);
+  assert.ok(!after.guidanceStale());
 });
 
 test("new projects can pick hooks on the skills step too", async () => {

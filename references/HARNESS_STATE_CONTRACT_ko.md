@@ -1,10 +1,10 @@
 # 하네스 설정·잠금·상태 규약
 
-스키마 버전: **1**. 구현 위치는 `src/contract.rs`(지시서 0003)다. 이 규약은 1단계 명세 §3에 따라 TUI가 **대상 프로젝트**에 쓰는 파일을 다룬다. 이 저장소 자체의 설정이 아니다.
+스키마 버전: **2**(2단계, 2026-11-24). 버전 1도 계속 읽는다(공통 규칙 참고). 구현 위치는 `src/contract.rs`(지시서 0003)다. 이 규약은 1단계 명세 §3과 [2단계 명세](STEP_2_SETUP_FLOW_ko.md)에 따라 TUI가 **대상 프로젝트**에 쓰는 파일을 다룬다. 이 저장소 자체의 설정이 아니다.
 
 | 파일 | 역할 | Git |
 | --- | --- | --- |
-| `harness.toml` | 공유 의도: 경로, 에이전트, 소스, 선택 스킬, 배치 방식, 백로그 옵션 | 포함 |
+| `harness.toml` | 공유 의도: 경로, 에이전트, 소스, 선택 스킬, 배치 방식, 백로그 옵션, 콘텐츠 서비스, 동적 스킬·참조 문서 | 포함 |
 | `harness.lock.json` | 확정된 가져오기: 소스·ref, 파일 목록, 해시 | 포함 |
 | `.harness/state.json` | 마지막 성공 적용, 소유권, 기준 해시, 배치, 어댑터 | 제외 |
 | `.harness/backups/<apply-id>/<path>` | 도구가 변경한 각 파일의 적용 전 사본 | 제외 |
@@ -12,7 +12,7 @@
 
 ## 공통 규칙
 
-- 모든 파일에는 정수 `schema_version`이 있다. 버전은 다른 필드보다 **먼저** 읽는다. 버전이 없으면 파싱 오류다. 1이 아닌 버전은 미지원으로 보고하고 파일은 변경하지 않는다. 1단계에는 마이그레이션이 없으며, 백업을 동반한 마이그레이션은 3단계에서 추가한다.
+- 모든 파일에는 정수 `schema_version`이 있다. 버전은 다른 필드보다 **먼저** 읽는다. 버전이 없으면 파싱 오류다. 버전 1과 2를 읽는다. 그 밖의 버전은 미지원으로 보고하고 파일은 변경하지 않는다. 버전 1 파일은 메모리에서 올린다. `harness.toml`에서는 `paths.output`이 값은 그대로인 채 `paths.artifacts`가 되고(디렉터리는 옮기지 않음), `paths.references`가 없으면 `references`, `paths.instructions`가 없으면 `instructions`가 된다. 잠금·상태 파일은 필드 변경이 없다. 다음 적용이 성공하면 평소처럼 백업한 뒤 버전 2로 쓴다. 백업을 동반한 일반 마이그레이션은 3단계 범위다.
 - 모든 테이블에서 모르는 키를 거부한다. 이 방식으로 일시적 정보(포트, 서비스 할당)와 섞여 들어온 비밀 값이 공유 파일에 들어가지 않게 한다.
 - 모든 경로는 프로젝트 상대 `RelPath`다. `/`로 구분하고 정규화하며, 절대 경로나 루트 이탈 경로는 허용하지 않는다. Windows 드라이브 경로와 `..` 이탈은 파일을 파싱할 때 거부한다. 심볼릭 링크는 경로를 해석할 때 실제 파일 시스템 기준으로 확인한다(지시서 0002).
 - ID(`source`, `skill`, 적용 `id`)는 슬러그다. 형식은 `[A-Za-z0-9._-]+`이며 `.`이나 `-`로 시작하지 않는다. 중복 여부는 대소문자를 무시하고 비교한다.
@@ -22,46 +22,63 @@
 ## `harness.toml`
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [paths]
-references = "references"   # 사용자 변경 가능
-output = ".output"          # 사용자 변경 가능, 마지막 이름은 "."으로 시작
+instructions = "instructions"   # 필수, 사용자 변경 가능
+artifacts = ".artifacts"        # 선택, 키를 빼면 사용 안 함
+docs = "docs"                   # 선택, 키를 빼면 사용 안 함
+references = "references"       # 선택, 키를 빼면 사용 안 함
 
 [backlog]
 enabled = false
-path = "agent.db"           # 1단계 고정
+path = "agent.db"               # 고정
 
 [[agents]]
-id = "claude-code"          # claude-code | codex
-placement = "copy"          # copy | reference
+id = "claude-code"              # 프로젝트 구성의 에이전트 id
+placement = "copy"              # copy | reference
+
+[service]                       # 선택: 콘텐츠 서비스 (2단계 명세 §7)
+url = "https://harness.example.internal"
+project = "my-project"
+token_env = "HARNESS_SERVICE_TOKEN"  # 변수 이름만, 값은 절대 저장하지 않음
+
+[[dynamic_skills]]
+id = "team-release"             # 서비스의 스킬 이름
+track = true                    # false: 스텁을 .gitignore에 추가
+
+[[dynamic_references]]
+path = "runbooks/deploy.md"     # 서비스의 참조 문서 경로
 
 [[sources]]
 id = "wiki"
-kind = "wiki-gateway"       # https://md-gw.zerotymer.net (고정, 저장하지 않음)
-token_env = "GATEWAY_TOKEN" # 변수 이름만, 값은 절대 저장하지 않음
+kind = "wiki-gateway"           # https://md-gw.zerotymer.net (고정, 저장하지 않음)
+token_env = "GATEWAY_TOKEN"     # 변수 이름만, 값은 절대 저장하지 않음
 
 [[sources]]
 id = "vendored"
 kind = "local-dir"
-path = "vendor/skills"      # 프로젝트 상대 경로
+path = "vendor/skills"          # 프로젝트 상대 경로
 
 [[skills]]
-id = "wiki-skill-import"    # .skills/<id>/ 디렉터리 이름이기도 함
+id = "wiki-skill-import"        # .skills/<id>/ 디렉터리 이름이기도 함
 source = "wiki"
 ref = "14cea96f-f1e2-461e-b9a7-96b5a6f63b67"  # wiki-gateway는 페이지 UUID
-type = "skill"              # 선택, wiki-gateway 전용
+type = "skill"                  # 선택, wiki-gateway 전용
 
 [[skills]]
 id = "local-one"
 source = "vendored"
-ref = "local-one"           # 로컬 소스 기준 상대 디렉터리
+ref = "local-one"               # 로컬 소스 기준 상대 디렉터리
 ```
 
-`instructions/`와 `.skills/`는 1단계에서 고정이므로 저장하지 않는다. 검증 규칙은 다음과 같다.
+`.skills/`는 고정이므로 저장하지 않는다. 선택 경로 키가 없으면 그 경로는 사용하지 않는다. 어떤 경로에도 이름 형식을 강제하지 않는다(이슈 #36). 검증 규칙은 다음과 같다.
 
+- `paths.instructions`는 필수다. 관리 경로끼리 중복(대소문자 무시)되거나 중첩되면 안 된다.
 - `backlog.path`는 `agent.db`여야 한다.
-- 에이전트·소스·스킬 ID는 고유해야 한다.
+- 에이전트·소스·스킬·동적 스킬 ID는 고유해야 한다. 동적 참조 문서 경로는 고유해야 한다.
+- `[service]`: `url`은 `https://`이며, 루프백 주소만 `http://`를 허용한다. `project`는 슬러그다. `token_env`는 `[A-Z_][A-Z0-9_]*` 형식이다.
+- `dynamic_skills`와 `dynamic_references`에는 `[service]`가 있어야 한다. 동적 스킬 ID는 슬러그이며 스킬 ID와 같으면 안 된다(대소문자 무시).
 - `local-dir`에는 `path`가 필요하고 `token_env`는 쓸 수 없다.
 - `wiki-gateway`에는 `token_env`(형식 `[A-Z_][A-Z0-9_]*`)가 필요하고 `path`는 쓸 수 없다. 토큰은 선택 사항이므로 이 변수가 설정되지 않아도 된다.
 - 각 스킬은 존재하는 소스를 참조해야 한다. `wiki-gateway` 스킬의 `ref`는 UUID여야 하고, `type`은 슬러그를 `/`로 이은 값이어야 한다(예: `skill`, `claude/hook`).
@@ -93,6 +110,7 @@ ref = "local-one"           # 로컬 소스 기준 상대 디렉터리
 - `revision`은 소스가 알려 준 리비전(게이트웨이 `contentHash`)을 그대로 기록한 값이다.
 - `locale`은 선택 항목이다.
 - 스킬마다 파일이 하나 이상 있어야 하고, 파일 경로는 중복되지 않아야 한다.
+- `docs`(선택)는 내려받은 문서를 기록한다: `{ "id", "url", "path", "hash" }`. `path`는 참조 문서 경로 아래의 프로젝트 상대 경로이고, `hash`는 저장한 바이트의 해시다. ID와 경로는 중복되지 않는다.
 
 ## `.harness/state.json`
 
@@ -113,8 +131,8 @@ ref = "local-one"           # 로컬 소스 기준 상대 디렉터리
 ```
 
 - **`last_success`**: 계획한 쓰기가 모두 성공한 뒤에만 기록한다. `id`는 백업 디렉터리 이름으로도 쓴다. `at`은 UTC RFC 3339 시각(`…Z`)이다. `id`는 같은 시각을 `YYYYMMDD-HHMMSS`로 쓴 값이며, 같은 이름의 백업 디렉터리가 있으면 `-2`, `-3`, …을 붙인다.
-- **`managed`**: 소유권을 기록한다. `block`이 없는 항목은 도구가 파일 전체를 소유한다는 뜻이다. `block`이 있는 항목은 도구가 해당 관리 블록만 소유한다는 뜻이고, 파일의 나머지는 사용자 소유다. 한 경로를 두 방식으로 동시에 소유하지 않는다. `hash`는 소유한 내용의 기준 해시다. 빈 `instructions/completed.log`처럼 없을 때만 만드는 파일은 소유하지 않으며 기록하지도 않는다.
-- **`deployments`**: 에이전트별 스킬 배치다. `copy` 배치에는 해시가 있어야 하고, `reference` 배치에는 해시가 없다. 배치 대상은 중복되지 않는다.
+- **`managed`**: 소유권을 기록한다. `block`이 없는 항목은 도구가 파일 전체를 소유한다는 뜻이다. `block`이 있는 항목은 도구가 해당 관리 블록만 소유한다는 뜻이고, 파일의 나머지는 사용자 소유다. 한 경로를 두 방식으로 동시에 소유하지 않는다. `hash`는 소유한 내용의 기준 해시다. 빈 `instructions/completed.log`나 `.gitkeep`처럼 없을 때만 만드는 파일은 소유하지 않으며 기록하지도 않는다. `block` 대신 `key`가 있는 항목은 도구가 JSON 파일의 그 항목만 소유한다는 뜻이다. 예: `.mcp.json`의 `mcpServers.agent-harness`. 이때 `hash`는 그 항목의 정규화한 JSON을 기준으로 한다.
+- **`deployments`**: 에이전트별 스킬 배치다. `copy` 배치에는 해시가 있어야 하고, `reference` 배치에는 해시가 없다. `dynamic` 배치는 동적 스킬 스텁(2단계 명세 §7)이며 해시가 있다. 배치 대상은 중복되지 않는다.
 - **`adapters`**: 도구가 에이전트별로 구현한 어댑터 규약 버전이다.
 
 ## 관리 블록 마커

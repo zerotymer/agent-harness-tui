@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_REPORT.md`). Stage 2 is catalog integration; the former Stage 2 features moved to Stage 3 (instruction 0019). The repo holds the spec (SDD) for a standalone Rust TUI (Ratatui + Crossterm) that sets up an agent harness, plus the Rust crate `agent-harness-tui` that implements it. The repo itself also follows a layout similar to what the harness manages.
+Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_REPORT.md`). The stages after Stage 1 are being redefined around the flow redesign in `instructions/0022_flow-redesign.md` (2026-11-23): Stage 2 becomes that flow (agents, paths, guidance, catalogs), Stage 3 keeps the remaining extras. The content service for dynamic skills and references is a separate program; this repository implements only its client. The repo holds the spec (SDD) for a standalone TUI that sets up an agent harness, plus its implementation `agent-harness-tui`.
+
+**Platform change (2026-11-24):** the implementation moves from Rust (Ratatui + Crossterm) to Node.js: TypeScript + Ink 8 on Node.js 22.13 or later, developed with pnpm, tested with the built-in `node:test`, and released as an `npm pack` tarball on GitHub Releases (install with `npm install -g <tarball URL>`; no npm registry publishing for now). Agents and skills are installed through npm, so Node.js is the whole environment. Instruction 0025 ports Stage 1 to Node with its acceptance tests and then removes the Rust crate in the same PR; 0023 and 0024 are implemented on Node after it. Until 0025 is done, the Rust commands below still apply. The repo itself also follows a layout similar to what the harness manages.
+
+Current (Rust, until 0025):
 
 - Build: `cargo build`
 - Test: `cargo test` (tests build target projects in temporary directories)
@@ -14,22 +18,28 @@ Stage 1 is implemented and accepted by the user (2026-11-20; see `docs/STAGE1_RE
 - CI: `.github/workflows/ci.yml` runs clippy, tests and a release build on Linux, Windows and macOS (fmt on Linux) for pull requests and pushes to `main`, and uploads the binaries as workflow artifacts. Actions are official `actions/*` only, pinned to commit SHAs.
 - Release: pushing a `v*` tag that matches the `Cargo.toml` version (for example `git tag v0.1.0 && git push origin v0.1.0`) runs `.github/workflows/release.yml`, which tests and builds on the three OSes and publishes the binaries with `SHA256SUMS` as a GitHub Release. Only its publish job gets `contents: write`.
 
+Target (Node, from 0025; exact scripts are set by 0025):
+
+- Install: `pnpm install`. Build: `pnpm build` (TypeScript to JavaScript; Node 22 cannot run TypeScript directly). Test: `pnpm test` (`node:test`). Lint and type check: `pnpm lint`.
+- `package.json` sets `"engines": { "node": ">=22.13" }`: Ink 8 and the Claude Code npm package need 22, and the built-in `node:sqlite` needs 22.13 to run without a flag.
+- CI and release keep the same shape: three OSes, official `actions/*` pinned to SHAs, release on a `v*` tag matching the `package.json` version, `contents: write` only for publishing.
+
 - `README.md` / `README_ko.md`: purpose, design decisions, and official sources to re-check before implementing.
 - `references/STEP_1_INITIAL_CREATION*.md`: Stage 1, which covers initial harness creation.
 - `docs/USAGE*.md`: install and usage. `docs/STAGE1_REPORT*.md`: Stage 1 verification report.
-- `references/STEP_2_CATALOG_INTEGRATION*.md`: Stage 2, local JSON catalogs for Wiki.js pages, public skills (`npx skills add`) and documents. `references/HARNESS_CATALOG_CONTRACT*.md`: the catalog format.
-- `references/STEP_3_ADDITIONAL_FEATURES*.md`: Stage 3, which covers the bounded updater, override layers, modes, hooks, and Git worktree/Worktrunk/Docktree support.
+- `references/STEP_2_SETUP_FLOW*.md`: Stage 2, the setup flow: agent detection and install, freely configurable paths, guidance files, catalog installs (skills, wiki skills, docs, hooks) and the content-service client for dynamic skills and references. `references/HARNESS_CATALOG_CONTRACT*.md`: the `project.json` / `default.json` format.
+- `references/STEP_3_ADDITIONAL_FEATURES*.md`: Stage 3, which covers the bounded updater, override layers, modes, and Git worktree/Worktrunk/Docktree support.
 
 The spec is the source of truth. When an imported skill conflicts with the spec or with another skill, check with the user if needed, then fix the spec (both languages) or the local skill copy in `.skills/`. Record any local skill edit in that skill's `source.json` `localChanges`. Never edit the wiki originals; the user reports upstream changes, and a refresh must re-apply the local edits.
 
 ## Working rules for this repository
 
-- **Stage order:** Each stage must pass its acceptance criteria before the next starts (Stage 1 was accepted on 2026-11-20). Stage 2 adds catalogs only: no worktree/service management, runtime hook execution or general updater (those are Stage 3), and no SQLite schema other than the `agent.db` schema the user supplied (issue #21). The TUI never downloads a catalog.
+- **Stage order:** Each stage must pass its acceptance criteria before the next starts (Stage 1 was accepted on 2026-11-20). Stage 2 follows 0022. Stage 2 adds no worktree/service management, runtime hook execution or general harness updater (Stage 3), and no SQLite schema other than the `agent.db` schema the user supplied (issue #21). The project configuration (`project.json`, or the built-in `default.json`) is a local JSON file, and the TUI never downloads it. The content service is a separate program; this repository implements only its client. The TUI runs only argument arrays from a catalog, without a shell, after the user confirms.
 - **Languages:**
   - Work instructions are written in Korean only.
   - Agent-facing documents (references, skills, guidance such as this file) are an English `{name}.md` plus an equivalent Korean `{name}_ko.md`, and both are edited together.
   - Never invent translations for imported source documents.
-- **Do not invent external contracts:** do not guess endpoints or event names for `md.zerotymer.net`, agent hook contracts, Worktrunk (`.config/wt.toml`), or Docktree. Verify them against current official docs first. Unsupported features must show as unavailable; never add shims for them. Wiki pages are listed from the local wiki catalog (Stage 2), never from the network; the Stage 1 list/search dummy has been removed.
+- **Do not invent external contracts:** do not guess endpoints or event names for `md.zerotymer.net`, agent hook contracts, Worktrunk (`.config/wt.toml`), or Docktree. Verify them against current official docs first. Unsupported features must show as unavailable; never add shims for them. Wiki pages are listed from the local wiki catalog, never from a network listing. Dynamic skills and references are read from the content service each time they are used. The service contract is shared with the service project; never guess it.
 - **Git policy:**
   - Track `instructions/` (including `.completed/` and `completed.log`), `references/`, `.skills/`, and the root guidance files.
   - Ignore `.output/`, `.harness/`, `agent.db*`, agent session files (`.claude/session*`, `.codex/session*`), and credentials. `.output/` holds temporary, local-only output that is not shared; it is one-way and never read back as input.

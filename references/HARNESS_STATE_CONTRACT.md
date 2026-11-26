@@ -1,10 +1,10 @@
 # Harness config, lock and state contract
 
-Schema version: **1**. Implemented in `src/contract.rs` (instruction 0003). It covers what the TUI writes into a **target project**, as described in Stage 1 spec §3. It is not this repository's own configuration.
+Schema version: **2** (Stage 2, 2026-11-24). Version 1 is still read (see Common rules). Implemented in `src/contract.rs` (instruction 0003). It covers what the TUI writes into a **target project**, as described in the Stage 1 spec §3 and the [Stage 2 spec](STEP_2_SETUP_FLOW.md). It is not this repository's own configuration.
 
 | File | Role | Git |
 | --- | --- | --- |
-| `harness.toml` | Shared intent: paths, agents, sources, selected skills, placement, backlog option | Track |
+| `harness.toml` | Shared intent: paths, agents, sources, selected skills, placement, backlog option, content service, dynamic skills and references | Track |
 | `harness.lock.json` | Resolved imports: source and ref, file list, hashes | Track |
 | `.harness/state.json` | Last successful apply, ownership, baseline hashes, deployments, adapters | Ignore |
 | `.harness/backups/<apply-id>/<path>` | Pre-apply copy of each file the tool changed | Ignore |
@@ -12,7 +12,7 @@ Schema version: **1**. Implemented in `src/contract.rs` (instruction 0003). It c
 
 ## Common rules
 
-- Every file has an integer `schema_version`. The version is read **before** any other field. A missing version is a parse error. Any version other than 1 is reported as unsupported, and the file is left unchanged. Stage 1 has no migration; Stage 3 adds migration with backups.
+- Every file has an integer `schema_version`. The version is read **before** any other field. A missing version is a parse error. Versions 1 and 2 are read; any other version is reported as unsupported, and the file is left unchanged. A version 1 file is upgraded in memory: in `harness.toml`, `paths.output` becomes `paths.artifacts` with its value kept (directories are never moved), a missing `paths.references` becomes `references`, and a missing `paths.instructions` becomes `instructions`. Lock and state files need no field changes. The next successful apply writes version 2, with the usual backup. General migration with backups is Stage 3.
 - Unknown keys are rejected in every table. This is how transient data (ports, service allocations) and stray secrets are kept out of shared files.
 - Every path is a project-relative `RelPath`: `/`-separated, normalized, never absolute, never escaping the root. Windows drive paths and `..` escapes are rejected when the file is parsed. Symlinks are checked against the real filesystem when paths are resolved (instruction 0002).
 - IDs (`source`, `skill`, apply `id`) are slugs: `[A-Za-z0-9._-]+`, not starting with `.` or `-`. IDs are compared case-insensitively for duplicates.
@@ -22,46 +22,63 @@ Schema version: **1**. Implemented in `src/contract.rs` (instruction 0003). It c
 ## `harness.toml`
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [paths]
-references = "references"   # user configurable
-output = ".output"          # user configurable; the final name must start with "."
+instructions = "instructions"   # required, user configurable
+artifacts = ".artifacts"        # optional; omit the key to disable
+docs = "docs"                   # optional; omit the key to disable
+references = "references"       # optional; omit the key to disable
 
 [backlog]
 enabled = false
-path = "agent.db"           # fixed in Stage 1
+path = "agent.db"               # fixed
 
 [[agents]]
-id = "claude-code"          # claude-code | codex
-placement = "copy"          # copy | reference
+id = "claude-code"              # an agent id from the project configuration
+placement = "copy"              # copy | reference
+
+[service]                       # optional: content service (Stage 2 spec §7)
+url = "https://harness.example.internal"
+project = "my-project"
+token_env = "HARNESS_SERVICE_TOKEN"  # variable name only, never a value
+
+[[dynamic_skills]]
+id = "team-release"             # skill name from the service
+track = true                    # false: stubs are added to .gitignore
+
+[[dynamic_references]]
+path = "runbooks/deploy.md"     # reference path in the service
 
 [[sources]]
 id = "wiki"
-kind = "wiki-gateway"       # https://md-gw.zerotymer.net (fixed, not stored)
-token_env = "GATEWAY_TOKEN" # variable name only, never a value
+kind = "wiki-gateway"           # https://md-gw.zerotymer.net (fixed, not stored)
+token_env = "GATEWAY_TOKEN"     # variable name only, never a value
 
 [[sources]]
 id = "vendored"
 kind = "local-dir"
-path = "vendor/skills"      # project-relative
+path = "vendor/skills"          # project-relative
 
 [[skills]]
-id = "wiki-skill-import"    # also the directory .skills/<id>/
+id = "wiki-skill-import"        # also the directory .skills/<id>/
 source = "wiki"
 ref = "14cea96f-f1e2-461e-b9a7-96b5a6f63b67"  # page UUID for wiki-gateway
-type = "skill"              # optional, wiki-gateway only
+type = "skill"                  # optional, wiki-gateway only
 
 [[skills]]
 id = "local-one"
 source = "vendored"
-ref = "local-one"           # directory relative to the local source
+ref = "local-one"               # directory relative to the local source
 ```
 
-`instructions/` and `.skills/` are fixed in Stage 1, so they are not stored. Validation rules:
+`.skills/` is fixed, so it is not stored. A missing optional path key means that path is disabled. No name format is enforced on any path (issue #36). Validation rules:
 
+- `paths.instructions` is required. Managed paths must not duplicate (ignoring case) or nest inside each other.
 - `backlog.path` must be `agent.db`.
-- Agent, source and skill IDs must be unique.
+- Agent, source, skill and dynamic skill IDs must be unique. Dynamic reference paths must be unique.
+- `[service]`: `url` is `https://`, or `http://` to a loopback address only. `project` is a slug. `token_env` matches `[A-Z_][A-Z0-9_]*`.
+- `dynamic_skills` and `dynamic_references` need `[service]`. A dynamic skill ID is a slug and must not equal a skill ID (ignoring case).
 - `local-dir` needs `path` and takes no `token_env`.
 - `wiki-gateway` needs `token_env` (matching `[A-Z_][A-Z0-9_]*`) and takes no `path`. The variable may be unset: the token is optional.
 - Each skill must reference an existing source. A `wiki-gateway` skill's `ref` must be a UUID, and its `type` must be slugs joined by `/` (for example `skill` or `claude/hook`).
@@ -93,6 +110,7 @@ A local directory outside the project cannot be stored here, because shared file
 - `revision` is the source's own revision (the gateway's `contentHash`), copied verbatim.
 - `locale` is optional.
 - Each skill lists at least one file, and file paths are unique.
+- `docs` (optional) records downloaded documents: `{ "id", "url", "path", "hash" }`. `path` is project-relative under the references path, and `hash` covers the saved bytes. IDs and paths are unique.
 
 ## `.harness/state.json`
 
@@ -113,8 +131,8 @@ A local directory outside the project cannot be stored here, because shared file
 ```
 
 - **`last_success`**: written only after every planned write succeeded. Its `id` also names the backup directory. `at` is an RFC 3339 timestamp in UTC (`…Z`), and `id` is the same instant as `YYYYMMDD-HHMMSS`, with `-2`, `-3`, … appended if that backup directory already exists.
-- **`managed`**: records ownership. An entry without `block` means the tool owns the whole file. An entry with `block` means the tool owns only that managed block, and the rest of the file belongs to the user. A path is never owned both ways. `hash` is the baseline of the owned content. Create-only files, such as an empty `instructions/completed.log`, are never owned or recorded.
-- **`deployments`**: agent-specific skill placements. A `copy` deployment must have a hash; a `reference` deployment has none. Targets are unique.
+- **`managed`**: records ownership. An entry without `block` means the tool owns the whole file. An entry with `block` means the tool owns only that managed block, and the rest of the file belongs to the user. A path is never owned both ways. `hash` is the baseline of the owned content. Create-only files, such as an empty `instructions/completed.log` or a `.gitkeep`, are never owned or recorded. An entry with `key` (instead of `block`) means the tool owns only that entry of a JSON file, for example `mcpServers.agent-harness` in `.mcp.json`. `hash` then covers that entry's canonical JSON.
+- **`deployments`**: agent-specific skill placements. A `copy` deployment must have a hash; a `reference` deployment has none. A `dynamic` deployment is a dynamic skill stub (Stage 2 spec §7) and has a hash. Targets are unique.
 - **`adapters`**: the adapter contract version this tool implemented for each agent.
 
 ## Managed block markers

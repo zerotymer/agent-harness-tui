@@ -1,0 +1,54 @@
+# 0023 — 플로우 변경: 대상 에이전트 먼저 지정, 구성 파일의 `agents` 목록
+
+> Entity UUID: 01a2075e-03a3-7b7f-9a3e-1132607b5ce9   (로컬 생성, UUIDv7)
+> Status: TODO
+> Branch: `feature/agent-first-flow/01a2075e`
+> 근거: 2026-11-23 사용자 결정, 상위 지시서 `0022_flow-redesign.md` 1번
+> 선행: 0025 (Node 이식). 이 지시서는 Node(TypeScript + Ink)로 구현한다
+
+## 목표
+TUI의 첫 단계에서 대상 에이전트(claude, codex, ...)를 지정한다. 에이전트 정의와 설치 방법은 JSON 카탈로그에서 읽는다.
+
+## 사용자 결정 (2026-11-23)
+1. 첫 단계는 대상 에이전트 지정이다.
+2. 시스템에 설치된 에이전트를 먼저 감지해 보여 주고, 사용자가 고른다(선택 사항).
+3. 사용자는 감지되지 않은 에이전트를 골라 설치할 수 있고, 여러 개를 한 번에 설치할 수 있다. 설치된 에이전트가 하나도 없으면 하나 이상 설치해야 다음 단계로 간다.
+4. 설치는 명령 전체를 보여 주고 사용자가 확인한 경우에만 실행한다(`npx skills add`와 같은 터미널 넘기기 방식).
+5. 설치 명령은 OS별 인자 배열로 적고, 셸 없이 실행한다. `curl | bash` 형태는 지원하지 않는다.
+
+## 범위
+- 포함:
+  - 카탈로그 v2 로더(첫 작업): `project.json`, 없으면 내장 `default.json` 한 파일만 읽는다(규약: `HARNESS_CATALOG_CONTRACT*.md` v2). 0025에서 옮긴 카탈로그 항목 검증을 재사용한다. 0020의 환경변수·실행 파일 옆 위치, 위키 카탈로그 가져오기, `catalog/wiki.json`·`skills.json`·`docs.json`은 없앤다(2026-11-24 결정 A1·A2)
+  - `agents` 목록: `id`, `title`, `summary`, `detect`, `guidance`, `skills_dir`, OS별 `install`, `default`
+  - 내장 `default.json`에 Claude Code·Codex 수록. npm 설치로 통일(2026-11-24 공식 문서 확인, A9): `npm install -g @anthropic-ai/claude-code@latest`, `npm install -g @openai/codex`. 감지는 `claude --version`, `codex --version`
+  - 하드코딩된 `AgentId` 열거형을 카탈로그에서 읽은 `AgentSpec`(`id`, `title`, `guidance`, `skills_dir`)으로 바꾼다. `harness.toml`·`state.json`의 값은 이미 `claude-code`/`codex`라 스키마 변경 없이 호환된다(A4)
+  - 구성에 없는 에이전트 ID는 `harness.toml`에 남기고 "알 수 없음"으로 표시, 배치하지 않는다(A5)
+  - 감지: `spawn`의 `timeout` 5초(시간 초과 시 종료), `Promise.all`로 병렬 감지(A6)
+  - 프로그램 찾기: `PATH`에서 찾고 Windows는 `PATHEXT` 확장자도 시도(`npm.cmd`, `claude.cmd`). 감지·설치 공용(A7)
+  - 설치는 skills 설치와 같은 터미널 넘기기(`suspendTerminal`)를 재사용한다
+  - npm 설치 제약(PATH의 npm, Claude Code는 Node 22 이상, `EACCES` 시 sudo 없이 실패 보고, 셸 설치 스크립트 미지원)을 화면과 명세에 표시한다
+  - 지침 파일이 같은 에이전트는 하나로 취급한다: 블록 하나, 에이전트별 내용은 블록 하단에 덧붙인다(A8)
+  - TUI 단계 순서 변경: 에이전트 → 경로 → ... 루트 화면은 없애고 머리글에 표시한다(A3)
+  - 카탈로그 가드레일 문구 수정: `agents` 설치 인자 배열은 사용자 확인 후 실행할 수 있다
+  - 명세(`STEP_1`, `STEP_2`, 카탈로그 규약)와 사용 문서 영/한 수정
+- 제외: 에이전트 제거·갱신, 셸 문자열 실행
+
+## 테스트
+- `agents` 목록 검증(모르는 키, 중복 id, 옵션처럼 보이는 값, 빈 인자 배열)
+- `project.json` 우선, 없으면 내장 `default.json`, 병합 없음, 잘못된 `project.json`은 오류(대체 안 함)
+- 감지 제한 시간 초과 시 종료, Windows `PATHEXT` 찾기
+- 같은 지침 파일을 쓰는 두 에이전트에 블록이 하나만 생김
+- 감지: 대체 실행 파일로 설치됨/안 됨 판단
+- 설치된 에이전트가 없으면 설치 전에는 다음 단계로 갈 수 없음
+- 확인 없이는 설치 명령을 실행하지 않음, 여러 개 설치, 종료 코드 보고
+- 기존 `harness.toml` 에이전트 값 호환
+
+## 완료 기준 (DoD)
+- [ ] 테스트 포함 (build·lint·test 통과)
+- [ ] 영/한 문서 동시 수정
+- [ ] 가드레일 준수 확인
+- [ ] 브랜치에서 작업 후 PR 준비 (main 직접 push 금지)
+- [ ] 완료는 사용자가 명시적으로 선언한다
+
+## 가드레일 확인
+카탈로그에 적힌 인자 배열만, 사용자 확인 후, 셸 없이 실행한다. 셸 문자열은 실행하지 않는다.

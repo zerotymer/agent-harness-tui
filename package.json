@@ -1,0 +1,38 @@
+{
+  "name": "agent-harness-tui",
+  "version": "0.1.1",
+  "description": "Terminal UI that sets up an agent harness in the current project",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agent-harness-tui": "dist/main.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.js",
+    "templates",
+    "catalog"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "tsc -p . && node --test \"dist/**/*.test.js\"",
+    "lint": "biome check . && tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "ink": "^8.0.0",
+    "react": "^19.3.1",
+    "smol-toml": "^1.9.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -757,6 +757,34 @@ test("stale guidance blocks can be refreshed; user text is kept", async () => {
   assert.ok(!after.guidanceStale());
 });
 
+test("skills installed by the skills CLI can be updated after confirmation", async () => {
+  using p = project();
+  const w = await initialized(p);
+  assert.ok(!w.verifyActions().includes("update"), "no skills-lock.json, no button");
+  fs.writeFileSync(p.abs("skills-lock.json"), "{}");
+  const v = await p.wizard();
+  assert.deepEqual(v.verifyActions(), ["skills", "hooks", "update"]);
+  assert.match(screen(v), /\[스킬 갱신\]/);
+  v.npx = undefined;
+  v.focus = 2;
+  await press(v, "enter");
+  assert.equal(v.step, "update");
+  await press(v, "enter");
+  assert.equal(v.takeRun(), undefined, "nothing runs without npx");
+  assert.match(v.message ?? "", /찾을 수 없어/);
+  v.npx = NPX;
+  assert.ok(screen(v).includes(`${NPX} skills update -p`), screen(v));
+  await press(v, "enter");
+  const run = v.takeRun();
+  assert.deepEqual(run?.requests[0]?.args, ["skills", "update", "-p"]);
+  if (run) await v.finishRun(run, [{ ok: true, value: 0 }]);
+  assert.match(screen(v), /결과: /);
+  await press(v, "esc");
+  assert.equal(v.step, "verify");
+  assert.equal(v.focus, 2);
+  assert.equal(p.read("skills-lock.json"), "{}", "the harness never touches the CLI lock");
+});
+
 test("new projects can pick hooks on the skills step too", async () => {
   using p = project();
   const w = await p.wizard();

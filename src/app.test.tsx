@@ -26,8 +26,8 @@ test("renders the wizard at small and large sizes", async () => {
       Object.defineProperty(process.stdout, "columns", { value: columns, configurable: true });
       const { lastFrame, unmount } = render(<App wizard={w} />);
       const frame = lastFrame() ?? "";
-      assert.ok(frame.includes("루트·설정"), frame);
-      if (columns >= 80) assert.ok(frame.includes("▸ 1 루트·설정"), frame);
+      assert.ok(frame.includes("에이전트"), frame);
+      if (columns >= 80) assert.ok(frame.includes("▸ 1 에이전트"), frame);
       unmount();
     }
     assert.equal(fs.readdirSync(dir).length, 0, "rendering writes nothing");

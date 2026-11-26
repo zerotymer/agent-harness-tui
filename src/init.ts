@@ -3,6 +3,7 @@
 // in a single explicit step. No terminal code here.
 
 import * as apply from "./apply.js";
+import { type AgentEntry, builtinAgents } from "./catalog.js";
 import {
   CONFIG_FILE,
   configLayout,
@@ -70,6 +71,8 @@ export interface Prepared {
 /**
  * Builds the full plan: imports, instruction dirs, guidance blocks, skill
  * copies, `.gitignore` block, `harness.toml` and `harness.lock.json`.
+ * `agents` is the agent list of the project configuration; configured IDs
+ * missing from it are kept but get no guidance or copies.
  * Reads only; nothing is written. Throws an `Error` with a readable message.
  */
 export async function prepare(
@@ -77,6 +80,7 @@ export async function prepare(
   loaded: Loaded,
   config: HarnessConfig,
   imports: PendingImport[],
+  agents: AgentEntry[] = builtinAgents(),
 ): Promise<Prepared> {
   validate(HARNESS_CONFIG, config);
   const errs = validateLayout(configLayout(config), root);
@@ -101,13 +105,13 @@ export async function prepare(
     }
   }
 
-  const [dirs, desired] = await guidance.planItems(root, config);
+  const [dirs, desired] = await guidance.planItems(root, config, agents);
   dirs.push(config.paths.references, config.paths.output);
   desired.push(...imported);
 
-  const placed = placement.planPlacement(root, config, lock, loaded.state, imported);
+  const placed = placement.planPlacement(root, config, lock, loaded.state, imported, agents);
   desired.push(...placed.desired);
-  const copies = placement.ignorePaths(config, lock);
+  const copies = placement.ignorePaths(config, lock, agents);
   desired.push(gitignore.desired(root, config, copies));
   desired.push(apply.fileItem(RelPath.unchecked(CONFIG_FILE), toText(HARNESS_CONFIG, config)));
   desired.push(apply.fileItem(RelPath.unchecked(LOCK_FILE), toText(HARNESS_LOCK, lock)));
@@ -119,7 +123,7 @@ export async function prepare(
     config,
     lock,
     plan,
-    git: gitignore.gitReport(root, config, copies),
+    git: gitignore.gitReport(root, config, copies, "git", agents),
     warnings: placed.warnings,
   };
 }

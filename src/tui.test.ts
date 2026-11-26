@@ -19,15 +19,40 @@ const SK_LIST = 9;
 const SK_CATALOGS = 10;
 const SK_FIXED_ROWS = 11;
 
+/** A directory with stub executables, used as `PATH`. */
+function stubBin(names: string[]): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aht-tui-bin-"));
+  for (const n of names) {
+    if (process.platform === "win32") {
+      fs.writeFileSync(path.join(dir, `${n}.cmd`), `@echo off\r\necho ${n} 1.0.0\r\n`);
+    } else {
+      fs.writeFileSync(path.join(dir, n), `#!/bin/sh\necho '${n} 1.0.0'\n`, { mode: 0o755 });
+    }
+  }
+  return dir;
+}
+
 function project() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aht-tui-"));
+  // Claude Code is "installed"; Codex is not.
+  const bin = stubBin(["claude"]);
+  /** A wizard with detection finished, using the stub `PATH`. */
+  const wizard = async (pathValue: string = bin) => {
+    const w = await Wizard.create(new ProjectRoot(dir), { pathValue });
+    await w.detect();
+    return w;
+  };
   return {
     dir,
+    bin,
     abs: (rel: string) => path.join(dir, rel),
     read: (rel: string) => fs.readFileSync(path.join(dir, rel), "utf8"),
     files: () => fs.readdirSync(dir).length,
-    wizard: () => Wizard.create(new ProjectRoot(dir)),
-    [Symbol.dispose]: () => fs.rmSync(dir, { recursive: true, force: true }),
+    wizard,
+    [Symbol.dispose]: () => {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(bin, { recursive: true, force: true });
+    },
   };
 }
 
@@ -47,8 +72,9 @@ const screen = (w: Wizard) =>
 test("walks all steps and applies only on Enter", async () => {
   using p = project();
   const w = await p.wizard();
-  assert.equal(w.step, "root");
-  for (const expect of ["paths", "agents", "skills", "preview"]) {
+  assert.equal(w.step, "agents");
+  assert.match(w.header(), /구성: 내장 default\.json \(버전 /);
+  for (const expect of ["paths", "skills", "preview"]) {
     await press(w, "enter");
     assert.equal(w.step, expect);
     assert.equal(p.files(), 0, "nothing written before apply");
@@ -105,7 +131,7 @@ test("Korean path input and validation", async () => {
   await press(w, "backspace", 3);
   await typed(w, ".산출물");
   await press(w, "enter");
-  assert.equal(w.step, "agents");
+  assert.equal(w.step, "skills");
 });
 
 test("custom instructions dir is validated and applied", async () => {
@@ -127,7 +153,7 @@ test("custom instructions dir is validated and applied", async () => {
   assert.match(w.message ?? "", /지시서 경로/);
 
   await retype("docs/tasks");
-  await press(w, "enter", 4);
+  await press(w, "enter", 3);
   assert.equal(w.step, "done");
   assert.ok(fs.statSync(p.abs("docs/tasks/.completed")).isDirectory());
   assert.ok(fs.statSync(p.abs("docs/tasks/completed.log")).isFile());
@@ -143,7 +169,7 @@ test("backlog creates db and scripts and keeps an existing db", async () => {
     await press(w, "up"); // last row: backlog toggle
     await typed(w, " ");
     assert.match(screen(w), /instructions\/agent\.db/);
-    await press(w, "enter", 4);
+    await press(w, "enter", 3);
     assert.equal(w.step, "done", screen(w));
   };
   using p = project();
@@ -163,18 +189,78 @@ test("backlog creates db and scripts and keeps an existing db", async () => {
   assert.ok(fs.existsSync(q.abs("instructions/agent-db.sh")));
 });
 
-test("agents toggle and require one", async () => {
+test("agents come first, are detected and one must be installed", async () => {
   using p = project();
   const w = await p.wizard();
-  await press(w, "enter", 2);
-  assert.match(screen(w), /심볼릭 링크 배치: 선택 불가/);
+  const text = screen(w);
+  assert.match(text, /\[x\] Claude Code {2}설치됨 \(claude 1\.0\.0\)/);
+  assert.match(text, /\[ \] Codex {2}미설치/);
+  assert.match(text, /심볼릭 링크 배치: 선택 불가/);
   await typed(w, " "); // deselect Claude Code
   await press(w, "enter");
   assert.equal(w.step, "agents");
+  assert.match(w.message ?? "", /하나 이상 선택/);
   await press(w, "down", 2);
-  await typed(w, " "); // select Codex
+  await typed(w, " "); // select Codex only: not installed
   await press(w, "enter");
-  assert.equal(w.step, "skills");
+  assert.equal(w.step, "agents");
+  assert.match(w.message ?? "", /설치된 것이 없습니다/);
+  await press(w, "up", 2);
+  await typed(w, " "); // Claude Code again
+  await press(w, "enter");
+  assert.equal(w.step, "paths");
+  assert.deepEqual(
+    w.config().agents.map((a) => a.id),
+    ["claude-code", "codex"],
+  );
+});
+
+test("agent installs run only after confirmation, several at once", async () => {
+  using p = project();
+  const bin = stubBin(["npm"]); // nothing detected, npm available
+  try {
+    const w = await p.wizard(bin);
+    assert.equal(w.agents.filter((r) => r.detection?.kind === "installed").length, 0);
+    await press(w, "down", 2);
+    await typed(w, " "); // select Codex too
+    w.focus = w.agents.length * 2; // [설치]
+    await press(w, "enter");
+    assert.equal(w.step, "agentInstall");
+    assert.equal(w.takeRun(), undefined, "opening the screen runs nothing");
+    assert.match(
+      screen(w),
+      /Claude Code: {2}npm(\.cmd)? install -g @anthropic-ai\/claude-code@latest/,
+    );
+    assert.match(screen(w), /Codex: {2}npm(\.cmd)? install -g @openai\/codex/);
+    await press(w, "enter"); // confirm
+    const run = w.takeRun();
+    assert.equal(run?.kind, "agents");
+    assert.deepEqual(
+      run?.requests.map((r) => r.args.at(-1)),
+      ["@anthropic-ai/claude-code@latest", "@openai/codex"],
+    );
+    await w.finishRun(run!, [
+      { ok: true, value: 0 },
+      { ok: true, value: 243 },
+    ]);
+    assert.match(screen(w), /지난 결과: 실패 \(종료 코드 243\)/);
+    await press(w, "esc");
+    assert.equal(w.step, "agents");
+    assert.equal(p.files(), 0, "the TUI itself wrote nothing");
+  } finally {
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+});
+
+test("invalid project.json is shown and never replaced by the default", async () => {
+  using p = project();
+  fs.writeFileSync(p.abs("project.json"), '{"schema_version":2,"agents":{}}');
+  const w = await p.wizard();
+  assert.equal(w.step, "verify");
+  assert.match(screen(w), /project\.json: `agents` must be an array/);
+  assert.match(screen(w), /대체하지 않습니다/);
+  await press(w, "enter");
+  assert.ok(w.quit);
 });
 
 test("local skill import end to end", async () => {
@@ -182,7 +268,7 @@ test("local skill import end to end", async () => {
   fs.mkdirSync(p.abs("vendor/review"), { recursive: true });
   fs.writeFileSync(p.abs("vendor/review/SKILL.md"), "---\nname: review\n---\n");
   const w = await p.wizard();
-  await press(w, "enter", 3);
+  await press(w, "enter", 2);
   assert.equal(w.step, "skills");
   await press(w, "down"); // location
   await typed(w, "vendor");
@@ -227,7 +313,7 @@ test("wiki import through a mock gateway saves the token", async () => {
   try {
     const w = await p.wizard();
     w.gatewayUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    await press(w, "enter", 3);
+    await press(w, "enter", 2);
     await typed(w, " "); // switch to wiki
     w.focus = SK_LIST;
     await press(w, "enter");
@@ -266,22 +352,21 @@ test("wiki import through a mock gateway saves the token", async () => {
   }
 });
 
-test("catalog view shows the three built-in catalogs and returns", async () => {
+test("catalog view shows the configuration lists and returns", async () => {
   using p = project();
   const w = await p.wizard();
-  await press(w, "enter", 3);
+  await press(w, "enter", 2);
   w.focus = SK_CATALOGS;
   await press(w, "enter");
   assert.equal(w.step, "catalog");
-  assert.equal(w.title(), "4. 소스·스킬 ─ 카탈로그");
+  assert.equal(w.title(), "3. 소스·스킬 ─ 카탈로그");
   const text = screen(w);
   for (const want of [
-    "위키 카탈로그",
-    "공개 스킬 카탈로그",
-    "문서 카탈로그",
-    "내장 샘플",
-    "버전 2026.11.23",
-    "[목록만] wiki-skill-import",
+    "공개 스킬 3개",
+    "위키 스킬 5개 (목록만)",
+    "문서 1개 (목록만)",
+    "훅 1개 (참고용)",
+    "wiki-skill-import",
     "직접 실행: claude plugin",
     "anthropics-skills-README.md",
   ]) {
@@ -294,7 +379,7 @@ test("catalog view shows the three built-in catalogs and returns", async () => {
 });
 
 async function toInstall(w: Wizard, i: number) {
-  await press(w, "enter", 3);
+  await press(w, "enter", 2);
   w.focus = SK_CATALOGS;
   await press(w, "enter");
   assert.equal(w.step, "catalog");
@@ -313,12 +398,13 @@ test("install runs only after confirmation and reports the exit code", async () 
   assert.ok(screen(w).includes(`${NPX} skills add ${source} -s pdf`), screen(w));
   assert.match(screen(w), /이름 충돌: 없음/);
   await press(w, "enter"); // confirm
-  assert.deepEqual(w.takeRun()?.args, ["skills", "add", source, "-s", "pdf"]);
+  const run = w.takeRun()!;
+  assert.deepEqual(run.requests[0]?.args, ["skills", "add", source, "-s", "pdf"]);
   assert.equal(w.takeRun(), undefined, "runs once");
-  w.finishRun({ ok: true, value: 3 });
+  await w.finishRun(run, [{ ok: true, value: 3 }]);
   assert.match(screen(w), /실패 \(종료 코드 3\)/);
-  w.finishRun({ ok: true, value: 0 });
-  assert.match(screen(w), /설치 성공/);
+  await w.finishRun(run, [{ ok: true, value: 0 }]);
+  assert.match(screen(w), /결과: 성공 \(종료 코드 0\)/);
   await press(w, "esc");
   assert.deepEqual([w.step, w.focus], ["catalog", 0]);
   assert.equal(p.files(), 0, "the TUI itself wrote nothing");
@@ -359,12 +445,27 @@ test("install is blocked without npx, on conflict and for other installers", asy
 test("initialized project is summary and verify only", async () => {
   using p = project();
   const w = await p.wizard();
-  await press(w, "enter", 5);
+  await press(w, "enter", 4);
   assert.equal(w.step, "done");
   const again = await p.wizard();
   assert.match(screen(again), /이미 초기화된 프로젝트/);
   assert.match(screen(again), /변경할 항목이 없습니다/);
   await press(again, "enter");
   assert.ok(again.quit, "no re-init path");
-  assert.equal(again.step, "root");
+  assert.equal(again.step, "verify");
+});
+
+test("agent IDs missing from the configuration are kept and shown as unknown", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter", 4); // Claude Code, applied
+  assert.equal(w.step, "done");
+  fs.writeFileSync(
+    p.abs("project.json"),
+    '{"schema_version":2,"agents":[{"id":"other","title":{"en":"Other"},"detect":["other"],"guidance":"OTHER.md","skills_dir":".other/skills"}]}',
+  );
+  const again = await p.wizard();
+  assert.equal(again.step, "verify");
+  assert.match(screen(again), /에이전트: claude-code \(알 수 없음/);
+  assert.match(p.read("harness.toml"), /id = "claude-code"/, "kept in harness.toml");
 });

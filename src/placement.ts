@@ -3,7 +3,9 @@
 // `.skills/` stays the shared source. Per agent, skills are either copied
 // into the directory the agent discovers, or only referenced from guidance.
 //
-// Official discovery rules, checked 2026-11-16 (adapter version 1):
+// The skills directory per agent comes from the project configuration
+// (`agents[].skills_dir`, instruction 0023). The built-in entries follow the
+// official discovery rules, checked 2026-11-16 (adapter version 1):
 //
 // | Agent | Project skill directory | Source |
 // | --- | --- | --- |
@@ -16,6 +18,7 @@
 
 import fs from "node:fs";
 import { type Desired, fileItem, sha256 } from "./apply.js";
+import { type AgentEntry, agentTitle, builtinAgents, knownAgents } from "./catalog.js";
 import type {
   AdapterRecord,
   AgentId,
@@ -24,17 +27,11 @@ import type {
   HarnessLock,
   HarnessState,
 } from "./contract.js";
-import { type ProjectRoot, RelPath, skillsDir as sharedSkillsDir } from "./paths.js";
+import { type ProjectRoot, type RelPath, skillsDir as sharedSkillsDir } from "./paths.js";
 
 /** Bumped when an agent's discovery rules are re-checked and change. */
 export const ADAPTER_VERSION = "1";
 export const RULES_CHECKED = "2026-11-16";
-
-export const agentName = (agent: AgentId) => (agent === "claude-code" ? "Claude Code" : "Codex");
-
-/** Project directory the agent scans for skills. */
-export const skillsDir = (agent: AgentId) =>
-  RelPath.unchecked(agent === "claude-code" ? ".claude/skills" : ".agents/skills");
 
 export type Method = "copy" | "reference" | "symlink";
 
@@ -60,10 +57,6 @@ const unresolvable = (p: RelPath, reason: string): Desired => ({
   ownership: { kind: "unresolvable", reason },
 });
 
-/** Agents in config order, first entry wins for duplicates. */
-const uniqueAgents = (config: HarnessConfig) =>
-  config.agents.filter((a, i) => config.agents.findIndex((b) => b.id === a.id) === i);
-
 /**
  * Plans copies for every agent with `copy` placement and every locked
  * skill. `pending` holds files planned in the same apply (e.g. a fresh
@@ -75,13 +68,14 @@ export function planPlacement(
   lock: HarnessLock,
   state: HarnessState,
   pending: Desired[],
+  agents: AgentEntry[] = builtinAgents(),
 ): PlacementPlan {
   const out: PlacementPlan = { desired: [], deployments: [], adapters: [], warnings: [] };
-  for (const a of uniqueAgents(config)) {
+  for (const [a, entry] of knownAgents(config.agents, agents)) {
     out.adapters.push({ agent: a.id, version: ADAPTER_VERSION });
     if (a.placement !== "copy") continue;
     for (const skill of lock.skills) {
-      const targetDir = skillsDir(a.id).join(skill.id);
+      const targetDir = entry.skillsDir.join(skill.id);
       const deployed = state.deployments.some((d) => d.agent === a.id && d.skill === skill.id);
       if (!deployed && fs.existsSync(root.abs(targetDir))) {
         out.desired.push(
@@ -107,7 +101,7 @@ export function planPlacement(
         }
         if (f.path.toString() === "SKILL.md" && !bytes.subarray(0, 3).equals(Buffer.from("---"))) {
           out.warnings.push(
-            `\`${source}\` has no frontmatter; ${agentName(a.id)} needs \`name\` and \`description\` to discover it`,
+            `\`${source}\` has no frontmatter; ${agentTitle(entry)} needs \`name\` and \`description\` to discover it`,
           );
         }
         out.deployments.push({
@@ -128,11 +122,16 @@ export function planPlacement(
  * Regenerable copies, ignored by Git by default. Per skill, so unrelated
  * skills in the same agent directory stay tracked.
  */
-export function ignorePaths(config: HarnessConfig, lock: HarnessLock): RelPath[] {
+export function ignorePaths(
+  config: HarnessConfig,
+  lock: HarnessLock,
+  agents: AgentEntry[] = builtinAgents(),
+): RelPath[] {
   const out: RelPath[] = [];
-  for (const a of config.agents.filter((a) => a.placement === "copy")) {
+  for (const [a, entry] of knownAgents(config.agents, agents)) {
+    if (a.placement !== "copy") continue;
     for (const s of lock.skills) {
-      const p = skillsDir(a.id).join(s.id);
+      const p = entry.skillsDir.join(s.id);
       if (!out.some((o) => o.equals(p))) out.push(p);
     }
   }

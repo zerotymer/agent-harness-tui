@@ -43,13 +43,30 @@ export function conflict(entry: SkillsEntry, harness: Iterable<string>): Conflic
   return { kind: "none" };
 }
 
-/** Looks up `name` in the directories of a `PATH`-style value. */
-export function findProgram(name: string, pathValue: string | undefined): string | undefined {
+/**
+ * Looks up `name` in the directories of a `PATH`-style value, without a
+ * shell. On Windows a name without an extension also tries each `PATHEXT`
+ * extension, so `npm` finds `npm.cmd`.
+ */
+export function findProgram(
+  name: string,
+  pathValue: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+  pathext: string | undefined = process.env.PATHEXT,
+): string | undefined {
   if (!pathValue) return undefined;
-  for (const dir of pathValue.split(path.delimiter)) {
+  const win = platform === "win32";
+  const names = [name];
+  if (win && path.win32.extname(name) === "") {
+    const exts = (pathext || ".COM;.EXE;.BAT;.CMD").split(";").filter((e) => e !== "");
+    names.push(...exts.map((e) => name + e.toLowerCase()));
+  }
+  for (const dir of pathValue.split(win ? ";" : ":")) {
     if (dir === "") continue;
-    const p = path.join(dir, name);
-    if (fs.statSync(p, { throwIfNoEntry: false })?.isFile()) return p;
+    for (const n of names) {
+      const full = path.join(dir, n);
+      if (fs.statSync(full, { throwIfNoEntry: false })?.isFile()) return full;
+    }
   }
   return undefined;
 }
@@ -102,4 +119,15 @@ export function run(req: RunRequest, cwd: string): number | null {
   });
   if (out.error) throw new Error(`${req.program}: ${out.error.message}`);
   return out.status;
+}
+
+/** After a handover: waits for Enter so the user can read the output (spec §6.1). */
+export async function waitForEnter(): Promise<void> {
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    await rl.question("\nEnter를 누르면 agent-harness-tui로 돌아갑니다. ");
+  } finally {
+    rl.close();
+  }
 }

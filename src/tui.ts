@@ -1,25 +1,17 @@
-// Six-step wizard (Stage 1 spec §7, instruction 0010). Korean UI text.
+// Setup wizard (Stage 1 spec §7, Stage 2 spec §2–§3; instructions 0010,
+// 0023). Korean UI text. Steps: agents → paths → sources and skills →
+// preview → result. An initialized project gets a read-only check instead.
 //
 // `Wizard` is a plain state machine: `key` changes state and `view` only
 // describes it, so drawing never touches the network or disk. Network
 // access (skill fetch) happens only when the user activates a button.
 // Nothing is written before the explicit apply on the preview step.
 
+import { type Detection, detectAll, installRequest } from "./agents.js";
 import { type ApplyReport, conflicts, hasWrites, preview } from "./apply.js";
+import * as catalog from "./catalog.js";
+import { type AgentEntry, agentTitle, display, SKILLS_CLI, type SkillsEntry } from "./catalog.js";
 import {
-  DOCS,
-  type DocsEntry,
-  display,
-  loadBuiltin,
-  type Parsed,
-  SKILLS,
-  SKILLS_CLI,
-  type SkillsEntry,
-  WIKI,
-  type WikiEntry,
-} from "./catalog.js";
-import {
-  type AgentId,
   DEFAULT_TOKEN_ENV,
   defaultConfig,
   type HarnessConfig,
@@ -40,25 +32,27 @@ import {
   skillsDir,
   validateLayout,
 } from "./paths.js";
-import { agentName, skillsDir as agentSkillsDir, methods } from "./placement.js";
+import { methods } from "./placement.js";
 import { type CatalogEntry, LocalDir, type Package, slugify, WikiGateway } from "./sources.js";
 
 export type Step =
-  | "root"
-  | "paths"
+  /** Initialized project, or unreadable files: summary and check only. */
+  | "verify"
   | "agents"
+  /** Confirmation screen for agent installs. */
+  | "agentInstall"
+  | "paths"
   | "skills"
   | "preview"
   | "done"
-  /** View of the three catalogs, opened from the skills step. */
+  /** View of the configuration lists, opened from the skills step. */
   | "catalog"
   /** Confirmation screen for one public skill install. */
   | "install";
 
 export const STEPS: [Step, string][] = [
-  ["root", "루트·설정"],
+  ["agents", "에이전트"],
   ["paths", "경로·백로그"],
-  ["agents", "에이전트·배치"],
   ["skills", "소스·스킬"],
   ["preview", "미리보기"],
   ["done", "적용·결과"],
@@ -98,10 +92,23 @@ const attempt = <T>(f: () => T): Result<T> => {
   }
 };
 
-interface Catalogs {
-  wiki: Result<Parsed<WikiEntry>>;
-  skills: Result<Parsed<SkillsEntry>>;
-  docs: Result<Parsed<DocsEntry>>;
+/** One agent of the configuration on the agents step. */
+export interface AgentRow {
+  entry: AgentEntry;
+  selected: boolean;
+  placement: Placement;
+  /** Undefined while detection runs. */
+  detection?: Detection;
+  /** Exit code of the last install (null: signal), or why it could not run. */
+  installed?: Result<number | null>;
+}
+
+/** Confirmed runs waiting for the terminal handover (see `takeRun`). */
+export interface PendingRun {
+  kind: "skill" | "agents";
+  requests: install.RunRequest[];
+  /** Agent rows, in request order (`agents` only). */
+  rows: AgentRow[];
 }
 
 type InputField =
@@ -116,7 +123,7 @@ type InputField =
   | "skillName";
 
 export class Wizard {
-  step: Step = "root";
+  step: Step = "agents";
   focus = 0;
   scroll = 0;
   message: string | undefined;
@@ -124,17 +131,18 @@ export class Wizard {
   /** Set while an async action runs; keys are ignored meanwhile. */
   busy = false;
   readonly loaded: Result<init.Loaded>;
-  // step 2
+  /** `project.json` or the built-in default, or why it could not be read. */
+  readonly project: Result<catalog.Loaded>;
+  /** `PATH` used for detection and installs (overridable for tests). */
+  pathValue: string | undefined;
+  // agents
+  agents: AgentRow[] = [];
+  // paths
   references = defaultLayout().references.toString();
   output = defaultLayout().output.toString();
   instructions = defaultLayout().instructions.toString();
   backlog = false;
-  // step 3
-  agents: [AgentId, boolean, Placement][] = [
-    ["claude-code", true, "copy"],
-    ["codex", false, "reference"],
-  ];
-  // step 4
+  // sources and skills
   wiki = false;
   localDir = "";
   tokenEnv = DEFAULT_TOKEN_ENV;
@@ -143,7 +151,6 @@ export class Wizard {
   /** Token from `.harness/local.toml`, or why it could not be read. */
   readonly storedToken: Result<Secret | undefined>;
   gatewayUrl: string | undefined;
-  readonly catalogs: Catalogs;
   pageType = "skill";
   reference = "";
   skillName = "";
@@ -162,31 +169,66 @@ export class Wizard {
   npx: string | undefined;
   /** Index of the skills catalog entry on the install screen. */
   installPick = 0;
-  /** Confirmed install waiting for the terminal handover (see `takeRun`). */
-  runRequest: install.RunRequest | undefined;
+  /** Confirmed runs waiting for the terminal handover (see `takeRun`). */
+  pending: PendingRun | undefined;
   /** Exit code of the last install (null: signal), or why it could not run. */
   installResult: Result<number | null> | undefined;
 
-  private constructor(readonly root: ProjectRoot) {
+  private constructor(
+    readonly root: ProjectRoot,
+    pathValue: string | undefined,
+  ) {
+    this.pathValue = pathValue;
     this.loaded = attempt(() => init.load(root));
+    this.project = attempt(() => catalog.load(root.path));
     this.storedToken = attempt(() => loadToken(root.path));
-    this.catalogs = {
-      wiki: attempt(() => loadBuiltin(WIKI)),
-      skills: attempt(() => loadBuiltin(SKILLS)),
-      docs: attempt(() => loadBuiltin(DOCS)),
-    };
-    this.npx = install.findProgram(install.NPX, process.env.PATH);
+    this.npx = install.findProgram(install.NPX, pathValue);
+    this.agents = this.agentEntries().map((entry) => ({
+      entry,
+      selected: entry.default,
+      placement: "copy",
+    }));
   }
 
-  static async create(root: ProjectRoot): Promise<Wizard> {
-    const w = new Wizard(root);
-    // Already initialized: summary and a read-only verification only.
-    if (w.loaded.ok && w.loaded.value.config) {
-      const loaded = w.loaded.value;
-      const config = w.loaded.value.config;
-      w.prepared = await settle(init.prepare(root, loaded, config, []));
+  /**
+   * Loads the project. Detection is not started here; call `detect()`
+   * (the screen does so right after the first draw).
+   */
+  static async create(
+    root: ProjectRoot,
+    opts: { pathValue?: string | undefined } = {},
+  ): Promise<Wizard> {
+    const w = new Wizard(root, "pathValue" in opts ? opts.pathValue : process.env.PATH);
+    if (w.initialized() || !w.loaded.ok || !w.project.ok) {
+      w.step = "verify";
+      // Already initialized: summary and a read-only verification only.
+      const config = w.loaded.ok ? w.loaded.value.config : undefined;
+      if (w.loaded.ok && config && w.project.ok) {
+        const agents = w.project.value.config.agents;
+        w.prepared = await settle(init.prepare(root, w.loaded.value, config, [], agents));
+      }
     }
     return w;
+  }
+
+  /** Agent entries of the configuration (empty when it could not be read). */
+  agentEntries(): AgentEntry[] {
+    return this.project.ok ? this.project.value.config.agents : [];
+  }
+
+  skillsEntries(): SkillsEntry[] {
+    return this.project.ok ? this.project.value.config.skills : [];
+  }
+
+  /** Detects every agent in parallel; the screen redraws when it resolves. */
+  async detect(): Promise<void> {
+    for (const r of this.agents) delete r.detection;
+    const entries = this.agents.map((r) => r.entry);
+    const found = await detectAll(entries, undefined, this.pathValue);
+    found.forEach((d, i) => {
+      const row = this.agents[i];
+      if (row) row.detection = d;
+    });
   }
 
   initialized(): boolean {
@@ -205,7 +247,7 @@ export class Wizard {
     switch (k.name) {
       case "esc":
         // Esc on the first step quits, like Ctrl+C.
-        if (this.step === "root") this.quit = true;
+        if (this.step === "agents" || this.step === "verify") this.quit = true;
         else this.back();
         return;
       case "up":
@@ -247,12 +289,13 @@ export class Wizard {
   rows(): number {
     switch (this.step) {
       case "paths":
-      case "agents":
         return 4;
+      case "agents":
+        return this.agents.length * 2 + 2;
       case "skills":
         return SK_FIXED_ROWS + this.catalog.length;
       case "catalog":
-        return this.catalogs.skills.ok ? this.catalogs.skills.value.entries.length : 0;
+        return this.skillsEntries().length;
       default:
         return 0;
     }
@@ -300,8 +343,8 @@ export class Wizard {
     } else if (this.step === "agents") {
       const a = this.agents[Math.floor(f / 2)];
       if (!a) return;
-      if (f % 2 === 0) a[1] = !a[1];
-      else a[2] = a[2] === "copy" ? "reference" : "copy";
+      if (f % 2 === 0) a.selected = !a.selected;
+      else a.placement = a.placement === "copy" ? "reference" : "copy";
     } else if (this.step === "skills" && f === SK_KIND) {
       this.wiki = !this.wiki;
       this.catalog = [];
@@ -316,17 +359,19 @@ export class Wizard {
     this.focus = 0;
     this.scroll = 0;
     switch (this.step) {
-      case "root":
+      case "verify":
+      case "agents":
       case "done":
         return;
-      case "paths":
-        this.step = "root";
+      case "agentInstall":
+        this.focus = this.agentInstallRow();
+        this.step = "agents";
         return;
-      case "agents":
-        this.step = "paths";
+      case "paths":
+        this.step = "agents";
         return;
       case "skills":
-        this.step = "agents";
+        this.step = "paths";
         return;
       case "preview":
         this.prepared = undefined;
@@ -352,20 +397,27 @@ export class Wizard {
 
   private async enter() {
     switch (this.step) {
-      case "root":
-        if (this.initialized() || !this.loaded.ok) this.quit = true;
-        else this.go("paths");
+      case "verify":
+        this.quit = true;
         return;
+      case "agents":
+        if (this.focus === this.agentInstallRow()) {
+          this.go("agentInstall");
+        } else if (this.focus === this.agentInstallRow() + 1) {
+          await this.detect();
+          this.message = "다시 감지했습니다.";
+        } else {
+          this.leaveAgents();
+        }
+        return;
+      case "agentInstall":
+        return this.confirmAgentInstall();
       case "paths": {
         const l = attempt(() => this.layout());
-        if (l.ok) this.go("agents");
+        if (l.ok) this.go("skills");
         else this.message = l.error;
         return;
       }
-      case "agents":
-        if (this.agents.some((a) => a[1])) this.go("skills");
-        else this.message = "에이전트를 하나 이상 선택하세요.";
-        return;
       case "skills":
         switch (this.focus) {
           case SK_FETCH:
@@ -407,9 +459,47 @@ export class Wizard {
   }
 
   installEntry(): SkillsEntry | undefined {
-    return this.catalogs.skills.ok
-      ? this.catalogs.skills.value.entries[this.installPick]
-      : undefined;
+    return this.skillsEntries()[this.installPick];
+  }
+
+  private agentInstallRow(): number {
+    return this.agents.length * 2;
+  }
+
+  /** Selected agents that are not detected as installed. */
+  installTargets(): AgentRow[] {
+    return this.agents.filter((r) => r.selected && r.detection?.kind !== "installed");
+  }
+
+  private leaveAgents() {
+    const selected = this.agents.filter((r) => r.selected);
+    if (selected.length === 0) {
+      this.message = "에이전트를 하나 이상 선택하세요.";
+    } else if (selected.some((r) => r.detection === undefined)) {
+      this.message = "감지가 끝날 때까지 기다리세요.";
+    } else if (!selected.some((r) => r.detection?.kind === "installed")) {
+      this.message = "선택한 에이전트 중 설치된 것이 없습니다. [설치]로 하나 이상 설치하세요.";
+    } else {
+      this.go("paths");
+    }
+  }
+
+  /** Queues every available install; nothing runs without this confirmation. */
+  private confirmAgentInstall() {
+    const run: PendingRun = { kind: "agents", requests: [], rows: [] };
+    for (const r of this.installTargets()) {
+      const req = installRequest(r.entry, this.pathValue);
+      if ("program" in req) {
+        run.requests.push(req);
+        run.rows.push(r);
+      }
+    }
+    if (run.requests.length === 0) {
+      this.message = "실행할 수 있는 설치 명령이 없습니다.";
+      return;
+    }
+    this.pending = run;
+    this.message = undefined;
   }
 
   private installConflict(e: SkillsEntry): install.Conflict {
@@ -434,20 +524,31 @@ export class Wizard {
       this.message = `\`${install.NPX}\`를 찾을 수 없어 설치할 수 없습니다.`;
       return;
     }
-    this.runRequest = { program: this.npx, args };
+    this.pending = { kind: "skill", requests: [{ program: this.npx, args }], rows: [] };
     this.message = undefined;
   }
 
-  /** The confirmed install, for the caller to run with the terminal handed over. */
-  takeRun(): install.RunRequest | undefined {
-    const r = this.runRequest;
-    this.runRequest = undefined;
+  /** The confirmed runs, for the caller to run with the terminal handed over. */
+  takeRun(): PendingRun | undefined {
+    const r = this.pending;
+    this.pending = undefined;
     return r;
   }
 
-  /** Records the outcome of a run returned by `takeRun`. */
-  finishRun(result: Result<number | null>) {
-    this.installResult = result;
+  /**
+   * Records the outcomes of a run returned by `takeRun`, in request order.
+   * After agent installs, detection runs again.
+   */
+  async finishRun(run: PendingRun, results: Result<number | null>[]): Promise<void> {
+    if (run.kind === "skill") {
+      this.installResult = results[0];
+      return;
+    }
+    run.rows.forEach((r, i) => {
+      const res = results[i];
+      if (res) r.installed = res;
+    });
+    await this.detect();
   }
 
   // --------------------------------------------------------------- actions
@@ -591,7 +692,9 @@ export class Wizard {
       output: layout.output,
     };
     c.backlog = { enabled: this.backlog, path: backlogPath(layout) };
-    c.agents = this.agents.filter((a) => a[1]).map(([id, , placement]) => ({ id, placement }));
+    c.agents = this.agents
+      .filter((a) => a.selected)
+      .map((a) => ({ id: a.entry.id, placement: a.placement }));
     if (this.localLocked) {
       c.sources.push({ id: "local", kind: "local-dir", path: this.localLocked });
     }
@@ -613,7 +716,8 @@ export class Wizard {
     } else {
       const loaded = this.loaded.value;
       this.prepared = await settle(
-        (async () => init.prepare(this.root, loaded, this.config(), this.imports))(),
+        (async () =>
+          init.prepare(this.root, loaded, this.config(), this.imports, this.agentEntries()))(),
       );
     }
     this.go("preview");
@@ -647,7 +751,12 @@ export class Wizard {
 
   /** Sidebar position; the catalog views belong to the skills step. */
   stepIndex(): number {
-    const shown = this.step === "catalog" || this.step === "install" ? "skills" : this.step;
+    const shown =
+      this.step === "catalog" || this.step === "install"
+        ? "skills"
+        : this.step === "verify" || this.step === "agentInstall"
+          ? "agents"
+          : this.step;
     return Math.max(
       0,
       STEPS.findIndex(([s]) => s === shown),
@@ -659,15 +768,30 @@ export class Wizard {
     const base = `${i + 1}. ${STEPS[i]?.[1]}`;
     if (this.step === "catalog") return `${base} ─ 카탈로그`;
     if (this.step === "install") return `${base} ─ 공개 스킬 설치`;
+    if (this.step === "agentInstall") return `${base} ─ 설치 확인`;
+    if (this.step === "verify") return "초기화된 프로젝트";
     return base;
+  }
+
+  /** Shown on every screen: the project root and the configuration source. */
+  header(): string {
+    const p = this.project;
+    const source = !p.ok
+      ? "구성 오류"
+      : `${p.value.source === "project" ? catalog.PROJECT_FILE : "내장 default.json"}${
+          p.value.config.catalogVersion ? ` (버전 ${p.value.config.catalogVersion})` : ""
+        }`;
+    return `${this.root.path} · 구성: ${source}`;
   }
 
   keys(): string {
     switch (this.step) {
-      case "root":
-        return this.initialized() || !this.loaded.ok
-          ? "↑↓ 스크롤  Enter·Esc·q 종료"
-          : "Enter 다음  Esc·q 종료";
+      case "verify":
+        return "↑↓ 스크롤  Enter·Esc·q 종료";
+      case "agents":
+        return "↑↓ 이동  Space 선택·배치 전환  Enter 버튼 실행·다음  Esc·q 종료";
+      case "agentInstall":
+        return "Enter 확인·실행  Esc 돌아가기  q 종료";
       case "preview":
         return "↑↓ PgUp PgDn 스크롤  Enter 적용  Esc 이전  q·Ctrl+C 취소";
       case "done":
@@ -688,9 +812,10 @@ export class Wizard {
   /** Body lines of the current step, message included. */
   lines(): Line[] {
     const v = {
-      root: () => this.rootLines(),
-      paths: () => this.pathsLines(),
+      verify: () => this.verifyLines(),
       agents: () => this.agentLines(),
+      agentInstall: () => this.agentInstallLines(),
+      paths: () => this.pathsLines(),
       skills: () => this.skillLines(),
       preview: () => this.previewLines(),
       done: () => this.resultLines(),
@@ -707,29 +832,38 @@ export class Wizard {
       : raw(`  ${text}`);
   }
 
-  private rootLines(): Line[] {
+  private verifyLines(): Line[] {
     const v = [
-      raw(`프로젝트 루트: ${this.root.path}`),
       raw("현재 실행 디렉터리를 루트로 사용합니다. 상위 폴더를 찾거나 Git을 초기화하지 않습니다."),
       raw(""),
     ];
+    if (!this.project.ok) {
+      v.push(raw(`프로젝트 구성을 읽을 수 없습니다: ${this.project.error}`));
+      v.push(raw("내장 default.json으로 대체하지 않습니다. 파일을 고친 뒤 다시 실행하세요."));
+    }
     if (!this.loaded.ok) {
       v.push(raw(`기존 파일을 읽을 수 없습니다: ${this.loaded.error}`));
+    }
+    if (!this.project.ok || !this.loaded.ok) {
       v.push(raw("파일을 변경하지 않았습니다."));
       return v;
     }
     const { config: c, state, lock } = this.loaded.value;
-    if (!c) {
-      v.push(raw("하네스 설정이 없습니다. Enter로 새로 초기화를 시작합니다."));
-      return v;
-    }
+    if (!c) return v;
     v.push(raw("이미 초기화된 프로젝트입니다. 요약과 무변경 검증만 제공합니다."));
     v.push(raw("변경(스킬 추가·갱신 등)은 2단계 업데이트 기능에서 다룹니다."));
     v.push(raw(""));
     v.push(raw(`참조 문서: ${c.paths.references}/   산출물: ${c.paths.output}/`));
     v.push(raw(`백로그: ${c.backlog.enabled ? "사용" : "사용 안 함"}`));
     for (const a of c.agents) {
-      v.push(raw(`에이전트: ${agentName(a.id)} (${placementName(a.placement)})`));
+      const e = this.agentEntries().find((x) => x.id === a.id);
+      v.push(
+        raw(
+          e
+            ? `에이전트: ${agentTitle(e)} (${placementName(a.placement)})`
+            : `에이전트: ${a.id} (알 수 없음: 구성에 없어 배치하지 않음)`,
+        ),
+      );
     }
     for (const s of lock.skills) {
       v.push(raw(`스킬: ${s.id} (소스 ${s.source}, 파일 ${s.files.length}개)`));
@@ -780,19 +914,64 @@ export class Wizard {
 
   private agentLines(): Line[] {
     const v: Line[] = [];
-    this.agents.forEach(([id, on, placement], i) => {
-      v.push(this.row(i * 2, `${check(on)} ${agentName(id)}`));
+    if (this.agents.length === 0) v.push(raw("구성에 에이전트가 없습니다."));
+    this.agents.forEach((r, i) => {
+      v.push(this.row(i * 2, `${check(r.selected)} ${agentTitle(r.entry)}  ${detectionText(r)}`));
       const target =
-        placement === "copy"
-          ? `복사 → ${agentSkillsDir(id)}/<id>/`
+        r.placement === "copy"
+          ? `복사 → ${r.entry.skillsDir}/<id>/`
           : "참조 (지침에서 .skills/ 안내)";
-      v.push(this.row(i * 2 + 1, `    배치: ${target}`));
+      v.push(this.row(i * 2 + 1, `    배치: ${target}   지침: ${r.entry.guidance}`));
     });
+    const n = this.agents.length * 2;
+    v.push(this.row(n, "[설치] 선택했지만 감지되지 않은 에이전트 설치"));
+    v.push(this.row(n + 1, "[다시 감지]"));
     v.push(raw(""));
-    for (const [m, why] of methods("claude-code")) {
+    for (const [m, why] of methods("")) {
       if (m === "symlink" && why) v.push(raw(`심볼릭 링크 배치: 선택 불가 (${why})`));
     }
+    v.push(raw("선택한 에이전트 중 하나 이상이 설치되어 있어야 다음 단계로 갑니다."));
     v.push(raw("에이전트는 지침 경로만으로 .skills/를 자동으로 찾지 않습니다."));
+    return v;
+  }
+
+  private agentInstallLines(): Line[] {
+    const targets = this.installTargets();
+    if (targets.length === 0) {
+      return [raw("설치할 에이전트가 없습니다. 감지되지 않은 에이전트를 선택하세요.")];
+    }
+    const v = [raw("실행할 명령 (셸 없이, 프로젝트 루트에서, 하나씩 차례로):"), raw("")];
+    let ready = 0;
+    for (const r of targets) {
+      const req = installRequest(r.entry, this.pathValue);
+      if ("program" in req) {
+        ready++;
+        v.push(raw(`${agentTitle(r.entry)}:  ${install.display(req)}`));
+      } else {
+        v.push(raw(`${agentTitle(r.entry)}:  사용 불가 (${req.unavailable})`));
+      }
+      if (r.installed?.ok) {
+        v.push(raw(`    지난 결과: ${exitText(r.installed.value)}`));
+      } else if (r.installed) {
+        v.push(raw(`    지난 결과: 실행하지 못함 (${r.installed.error})`));
+      }
+    }
+    v.push(raw(""));
+    v.push(
+      raw(
+        "npm 전역 설치입니다. npm prefix에 쓸 권한이 없으면 EACCES로 실패하며, sudo나 권한 상승은 쓰지 않습니다.",
+      ),
+    );
+    v.push(
+      raw(
+        "Claude Code는 Node.js 22 이상이 필요합니다. 셸 설치 스크립트(curl | bash 등)는 지원하지 않습니다.",
+      ),
+    );
+    if (ready > 0) {
+      v.push(raw(""));
+      v.push(raw("Enter를 누르면 TUI 화면을 잠시 닫고 터미널을 설치 명령에 넘깁니다."));
+      v.push(raw("끝나면 Enter로 돌아오고, 종료 코드를 보여 준 뒤 다시 감지합니다."));
+    }
     return v;
   }
 
@@ -914,40 +1093,42 @@ export class Wizard {
   }
 
   private catalogLines(): Line[] {
-    const v = [raw("카탈로그는 로컬 파일만 읽습니다. 네트워크로 내려받지 않습니다."), raw("")];
-    const c = this.catalogs;
-    v.push(catalogHead("위키", c.wiki));
-    if (c.wiki.ok) {
-      // Listed only: the page UUID can be typed on the skills step.
-      for (const e of c.wiki.value.entries) {
-        v.push(raw(`  [목록만] ${e.id}  ${display(e.title)}  (type ${e.pageType})`));
-        v.push(raw(`      ${e.uuid}${e.status === "archived" ? "  (보관됨)" : ""}`));
-      }
+    const v = [raw("프로젝트 구성만 읽습니다. 네트워크로 내려받지 않습니다."), raw("")];
+    if (!this.project.ok) {
+      v.push({ text: `구성 오류: ${this.project.error}`, bold: true });
+      return v;
     }
-    v.push(raw(""), catalogHead("공개 스킬", c.skills));
-    if (c.skills.ok) {
-      c.skills.value.entries.forEach((e, i) => {
-        const state =
-          e.installer !== SKILLS_CLI
-            ? "직접 설치"
-            : !this.npx
-              ? "사용 불가"
-              : this.installConflict(e).kind === "with"
-                ? "충돌"
-                : "설치 가능";
-        v.push(
-          this.row(i, `[${state}] ${e.id}  ${display(e.title)}  ← ${e.installer} ${e.source}`),
-        );
-        if (e.installer === SKILLS_CLI) v.push(raw(`      스킬: ${e.skill ?? "*"}`));
-        else if (e.install) v.push(raw(`      직접 실행: ${e.install}`));
-      });
+    const c = this.project.value.config;
+    v.push({ text: `공개 스킬 ${c.skills.length}개`, bold: true });
+    c.skills.forEach((e, i) => {
+      const state =
+        e.installer !== SKILLS_CLI
+          ? "직접 설치"
+          : !this.npx
+            ? "사용 불가"
+            : this.installConflict(e).kind === "with"
+              ? "충돌"
+              : "설치 가능";
+      v.push(this.row(i, `[${state}] ${e.id}  ${display(e.title)}  ← ${e.installer} ${e.source}`));
+      if (e.installer === SKILLS_CLI) v.push(raw(`      스킬: ${e.skill ?? "*"}`));
+      else if (e.install) v.push(raw(`      직접 실행: ${e.install}`));
+    });
+    // Listed only for now: importing, downloading and hooks come later (0022 item 5).
+    v.push(raw(""), { text: `위키 스킬 ${c.wikiSkills.length}개 (목록만)`, bold: true });
+    for (const e of c.wikiSkills) {
+      const archived = e.status === "archived" ? "  (보관됨)" : "";
+      v.push(raw(`  ${e.id}  ${display(e.title)}  (type ${e.pageType})${archived}`));
+      v.push(raw(`      ${e.uuid}`));
     }
-    v.push(raw(""), catalogHead("문서", c.docs));
-    if (c.docs.ok) {
-      for (const e of c.docs.value.entries) {
-        v.push(raw(`  [목록만] ${e.id}  ${display(e.title)}  → ${e.filename}`));
-        v.push(raw(`      ${e.url}`));
-      }
+    v.push(raw(""), { text: `문서 ${c.docs.length}개 (목록만)`, bold: true });
+    for (const e of c.docs) {
+      v.push(raw(`  ${e.id}  ${display(e.title)}  → ${e.filename}`));
+      v.push(raw(`      ${e.url}`));
+    }
+    v.push(raw(""), { text: `훅 ${c.hooks.length}개 (참고용)`, bold: true });
+    for (const e of c.hooks) {
+      v.push(raw(`  ${e.id}  ${display(e.title)}${e.summary ? `  ${display(e.summary)}` : ""}`));
+      if (e.url) v.push(raw(`      ${e.url}`));
     }
     return v;
   }
@@ -995,15 +1176,7 @@ export class Wizard {
     }
     const r = this.installResult;
     if (r?.ok) {
-      v.push(
-        raw(
-          r.value === 0
-            ? "결과: 설치 성공 (종료 코드 0)"
-            : r.value === null
-              ? "결과: 실패 (신호로 종료됨)"
-              : `결과: 실패 (종료 코드 ${r.value})`,
-        ),
-      );
+      v.push(raw(`결과: ${exitText(r.value)}`));
     } else if (r) {
       v.push(raw(`결과: 실행하지 못함 (${r.error})`));
     }
@@ -1026,14 +1199,19 @@ const textLines = (s: string) =>
     .filter((l) => l !== "")
     .map(raw);
 
-function catalogHead<E>(name: string, c: Result<Parsed<E>>): Line {
-  if (!c.ok) return { text: `${name} 카탈로그 오류: ${c.error}`, bold: true };
-  const ver = c.value.catalogVersion ? `, 버전 ${c.value.catalogVersion}` : "";
-  return {
-    text: `${name} 카탈로그 (출처: 내장 샘플${ver}) ${c.value.entries.length}개`,
-    bold: true,
-  };
+function detectionText(r: AgentRow): string {
+  const d = r.detection;
+  if (!d) return "감지 중…";
+  if (d.kind === "installed") return `설치됨${d.version ? ` (${d.version})` : ""}`;
+  return `미설치 (${d.reason})`;
 }
+
+const exitText = (code: number | null) =>
+  code === 0
+    ? "성공 (종료 코드 0)"
+    : code === null
+      ? "실패 (신호로 종료됨)"
+      : `실패 (종료 코드 ${code})`;
 
 function gitLines(g: GitReport): Line[] {
   return [

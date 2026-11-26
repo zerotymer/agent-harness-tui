@@ -99,6 +99,8 @@ Inspect nested or parent ignore effects when Git is available. If a supposedly s
 
 ## 7. TUI flow
 
+> 2026-11-26 (instruction 0023): Stage 2 changes this order. Agents come first (detect, select, install), and there is no root screen: the project root and the configuration source are shown in a header on every screen. An initialized project still gets only the summary and no-op verification below.
+
 1. Confirm the current project root and existing configuration.
 2. Configure instruction/reference/output paths and optional backlog use; show fixed paths explicitly.
 3. Select agents and supported skill deployment strategies.

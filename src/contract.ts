@@ -199,8 +199,8 @@ export function load<T>(spec: ContractSpec<T>, root: string): T | undefined {
 
 // ------------------------------------------------------------ harness.toml
 
-export const AGENT_IDS = ["claude-code", "codex"] as const;
-export type AgentId = (typeof AGENT_IDS)[number];
+/** Agent ID from the project configuration (a slug), e.g. `claude-code`. */
+export type AgentId = string;
 export type Placement = "copy" | "reference";
 export type SourceKind = "local-dir" | "wiki-gateway";
 
@@ -266,7 +266,11 @@ export function defaultConfig(): HarnessConfig {
 }
 
 const placement = oneOf<Placement>(["copy", "reference"]);
-const agentId = oneOf<AgentId>(AGENT_IDS);
+function agentId(v: unknown, at: string): AgentId {
+  const s = str(v, at);
+  if (!isSlug(s)) throw new DecodeError(`${at}: agent id \`${s}\` must be a slug`);
+  return s;
+}
 
 export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
   file: CONFIG_FILE,

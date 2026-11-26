@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 import { apply, plan } from "./apply.js";
+import { type AgentEntry, builtinAgents } from "./catalog.js";
 import {
   defaultConfig,
   defaultState,
@@ -13,6 +14,8 @@ import {
 } from "./contract.js";
 import { guidanceFiles, planItems, render } from "./guidance.js";
 import { ProjectRoot, RelPath } from "./paths.js";
+
+const [CLAUDE, CODEX] = builtinAgents() as [AgentEntry, AgentEntry];
 
 const temps: string[] = [];
 after(() => {
@@ -57,8 +60,8 @@ test("English and Korean share every path and value", () => {
   for (const enabled of [false, true]) {
     const c = config();
     c.backlog.enabled = enabled;
-    const en = render(c, "claude-code", "en");
-    const ko = render(c, "claude-code", "ko");
+    const en = render(c, [CLAUDE], "en");
+    const ko = render(c, [CLAUDE], "ko");
     assert.deepEqual(codeSpans(en), codeSpans(ko));
     assert.equal(en.split("\n").length, ko.split("\n").length, "same structure");
     for (const must of [
@@ -76,25 +79,49 @@ test("English and Korean share every path and value", () => {
 test("placement line matches agent and language", () => {
   const c = config();
   c.agents[1] = { id: "codex", placement: "copy" }; // codex copies, claude references
-  const codexEn = render(c, "codex", "en");
+  const codexEn = render(c, [CODEX], "en");
   assert.ok(codexEn.includes("`.agents/skills/<id>/`"));
-  assert.deepEqual(codeSpans(codexEn), codeSpans(render(c, "codex", "ko")));
-  const claude = render(c, "claude-code", "en");
+  assert.deepEqual(codeSpans(codexEn), codeSpans(render(c, [CODEX], "ko")));
+  const claude = render(c, [CLAUDE], "en");
   assert.ok(claude.includes("referenced, not copied"));
   assert.ok(!claude.includes(".claude/skills"));
 });
 
 test("skills are listed, not inlined", () => {
-  assert.ok(render(config(), "claude-code", "en").includes("| review | `.skills/review/` |"));
+  assert.ok(render(config(), [CLAUDE], "en").includes("| review | `.skills/review/` |"));
   const c = config();
   c.skills = [];
-  assert.ok(render(c, "claude-code", "ko").includes("아직 선택한 스킬이 없다"));
+  assert.ok(render(c, [CLAUDE], "ko").includes("아직 선택한 스킬이 없다"));
+});
+
+test("agents sharing a guidance file get one block with a section each", async () => {
+  const p = project();
+  const shared = { ...CODEX, id: "other", title: { en: "Other" } };
+  const c = config();
+  c.agents = [
+    { id: "codex", placement: "reference" },
+    { id: "other", placement: "copy" },
+  ];
+  const [, desired] = await planItems(p.root(), c, [CLAUDE, CODEX, shared]);
+  const guides = desired
+    .map((d) => `${d.path}`)
+    .filter((x) => x.endsWith(".md") && !x.includes("/"));
+  assert.deepEqual(guides, ["AGENTS.md", "AGENTS_ko.md"]);
+  const body = render(c, [CODEX, shared], "en");
+  assert.ok(body.indexOf("### Codex") < body.indexOf("### Other"));
+  assert.ok(body.indexOf("### Skills") < body.indexOf("### Codex"), "agent text at the bottom");
+});
+
+test("unknown agents get no guidance", async () => {
+  const p = project();
+  const c = config();
+  c.agents = [{ id: "gone", placement: "copy" }];
+  const [, desired] = await planItems(p.root(), c, [CLAUDE, CODEX]);
+  assert.ok(!desired.some((d) => `${d.path}`.endsWith(".md") && !`${d.path}`.includes("/")));
 });
 
 test("agents get plural AGENTS.md and CLAUDE.md", () => {
-  const names = (["codex", "claude-code"] as const).flatMap((a) =>
-    guidanceFiles(a).map(([, p]) => `${p}`),
-  );
+  const names = [CODEX, CLAUDE].flatMap((a) => guidanceFiles(a).map(([, p]) => `${p}`));
   assert.deepEqual(names, ["AGENTS.md", "AGENTS_ko.md", "CLAUDE.md", "CLAUDE_ko.md"]);
 });
 

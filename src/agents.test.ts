@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { detect, detectAll, installRequest } from "./agents.js";
-import { parse } from "./catalog.js";
+import { currentOs, parse } from "./catalog.js";
 
 const win = process.platform === "win32";
 
@@ -73,18 +73,18 @@ test("detectAll keeps list order", async () => {
 test("install request per OS, looked up on PATH", () => {
   using b = bin();
   fs.writeFileSync(path.join(b.dir, "npm"), "");
+  const os = currentOs();
+  if (!os) return; // not a supported platform
+  const other = os === "linux" ? "darwin" : "linux";
   const [agent] = parse(
-    `{"schema_version":2,"agents":[{"id":"a","title":{"en":"A"},"detect":["a"],"guidance":"A.md","skills_dir":".a","install":{"linux":["npm","install","-g","a"]}}]}`,
+    `{"schema_version":2,"agents":[{"id":"a","title":{"en":"A"},"detect":["a"],"guidance":"A.md","skills_dir":".a","install":{"${os}":["npm","install","-g","a"]}}]}`,
   ).agents;
-  assert.deepEqual(installRequest(agent!, b.dir, "linux"), {
+  assert.deepEqual(installRequest(agent!, b.dir), {
     program: path.join(b.dir, "npm"),
     args: ["install", "-g", "a"],
   });
-  assert.deepEqual(installRequest(agent!, b.dir, "darwin"), {
+  assert.deepEqual(installRequest(agent!, b.dir, other), {
     unavailable: "no install command for this OS",
   });
-  assert.match(
-    (installRequest(agent!, "", "linux") as { unavailable: string }).unavailable,
-    /not found/,
-  );
+  assert.match((installRequest(agent!, "") as { unavailable: string }).unavailable, /not found/);
 });

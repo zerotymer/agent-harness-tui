@@ -70,13 +70,16 @@ type = "skill"                  # optional, wiki-gateway only
 id = "local-one"
 source = "vendored"
 ref = "local-one"               # directory relative to the local source
+
+[[hooks]]                       # optional: hook reference entries (instruction 0026)
+id = "claude-code-hooks"        # a hook id from the project configuration; nothing is installed
 ```
 
 `.skills/` is fixed, so it is not stored. A missing optional path key means that path is disabled. No name format is enforced on any path (issue #36). Validation rules:
 
 - `paths.instructions` is required. Managed paths must not duplicate (ignoring case) or nest inside each other.
 - `backlog.path` must be `agent.db`.
-- Agent, source, skill and dynamic skill IDs must be unique. Dynamic reference paths must be unique.
+- Agent, source, skill, dynamic skill and hook IDs must be unique. Dynamic reference paths must be unique. `hooks` is written only when it has entries.
 - `[service]`: `url` is `https://`, or `http://` to a loopback address only. `project` is a slug. `token_env` matches `[A-Z_][A-Z0-9_]*`.
 - `dynamic_skills` and `dynamic_references` need `[service]`. A dynamic skill ID is a slug and must not equal a skill ID (ignoring case).
 - `local-dir` needs `path` and takes no `token_env`.

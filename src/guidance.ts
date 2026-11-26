@@ -9,7 +9,14 @@
 import { createOnly, type Desired } from "./apply.js";
 import * as backlog from "./backlog.js";
 import * as blocks from "./blocks.js";
-import { type AgentEntry, agentTitle, builtinAgents, knownAgents } from "./catalog.js";
+import {
+  type AgentEntry,
+  agentTitle,
+  builtinAgents,
+  type HookEntry,
+  knownAgents,
+  type Text,
+} from "./catalog.js";
 import { configLayout, type HarnessConfig } from "./contract.js";
 import { completedDir, completedLog, type ProjectRoot, RelPath, skillsDir } from "./paths.js";
 
@@ -46,6 +53,7 @@ export async function planItems(
   root: ProjectRoot,
   config: HarnessConfig,
   agents: AgentEntry[] = builtinAgents(),
+  hooks: HookEntry[] = [],
 ): Promise<[RelPath[], Desired[]]> {
   const layout = configLayout(config);
   const dirs = [layout.instructions, completedDir(layout)];
@@ -55,7 +63,9 @@ export async function planItems(
     const [first] = group;
     if (!first) continue;
     for (const [lang, file] of guidanceFiles(first)) {
-      desired.push(blocks.desired(root, file, "markdown", BLOCK_ID, render(config, group, lang)));
+      desired.push(
+        blocks.desired(root, file, "markdown", BLOCK_ID, render(config, group, lang, hooks)),
+      );
     }
   }
   return [dirs, desired];
@@ -66,7 +76,12 @@ export async function planItems(
  * goes at the bottom under each agent's title. Every code span appears in
  * both languages.
  */
-export function render(config: HarnessConfig, group: AgentEntry[], lang: Lang): string {
+export function render(
+  config: HarnessConfig,
+  group: AgentEntry[],
+  lang: Lang,
+  hookEntries: HookEntry[] = [],
+): string {
   // Disabled optional paths are not mentioned.
   const refs = config.paths.references;
   const docs = config.paths.docs;
@@ -201,6 +216,30 @@ export function render(config: HarnessConfig, group: AgentEntry[], lang: Lang): 
     for (const s of config.skills) push(`| ${s.id} | \`${skills}/${s.id}/\` |`);
   }
   push("");
+
+  if (config.hooks?.length) {
+    push("### Hooks (reference)", "### 훅(참고)");
+    push("");
+    push(
+      "- Reference entries only: the harness installs and runs no hook. Add the hooks you use to the agent's own settings yourself and adjust them there.",
+      "- 참고 항목일 뿐이며 하네스는 훅을 설치하거나 실행하지 않는다. 사용하는 훅은 에이전트 설정에 직접 추가하고 그곳에서 조정한다.",
+    );
+    const t = (x: Text) => (lang === "en" ? (x.en ?? x.ko) : (x.ko ?? x.en)) ?? "";
+    for (const h of config.hooks) {
+      const e = hookEntries.find((x) => x.id === h.id);
+      if (!e) {
+        push(
+          `- \`${h.id}\`: not in the project configuration.`,
+          `- \`${h.id}\`: 프로젝트 구성에 없는 항목.`,
+        );
+        continue;
+      }
+      const summary = e.summary ? ` — ${t(e.summary)}` : "";
+      const url = e.url ? ` ${e.url}` : "";
+      lines.push(`- \`${h.id}\`: ${t(e.title)}${summary}${url}`);
+    }
+    push("");
+  }
 
   for (const agent of group) {
     const name = agentTitle(agent);

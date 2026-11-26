@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import * as apply from "./apply.js";
-import { type AgentEntry, builtinAgents } from "./catalog.js";
+import { type AgentEntry, builtinAgents, type HookEntry } from "./catalog.js";
 import {
   CONFIG_FILE,
   configLayout,
@@ -82,6 +82,7 @@ export async function prepare(
   config: HarnessConfig,
   imports: PendingImport[],
   agents: AgentEntry[] = builtinAgents(),
+  hooks: HookEntry[] = [],
 ): Promise<Prepared> {
   validate(HARNESS_CONFIG, config);
   const errs = validateLayout(configLayout(config), root);
@@ -106,7 +107,7 @@ export async function prepare(
     }
   }
 
-  const [dirs, desired] = await guidance.planItems(root, config, agents);
+  const [dirs, desired] = await guidance.planItems(root, config, agents, hooks);
   const { artifacts, docs, references } = config.paths;
   for (const d of [docs, references, artifacts]) if (d) dirs.push(d);
   // Git keeps no empty directories: a new tracked directory gets an empty,

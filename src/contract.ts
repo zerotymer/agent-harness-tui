@@ -258,6 +258,17 @@ export interface HarnessConfig {
   agents: AgentConfig[];
   sources: SourceConfig[];
   skills: SkillConfig[];
+  /**
+   * Hook reference entries the user added (instruction 0026). Recorded and
+   * mentioned in guidance only; nothing is installed or run. Omitted when
+   * empty, so files written before it stay unchanged.
+   */
+  hooks?: HookConfig[];
+}
+
+export interface HookConfig {
+  /** A hook `id` from the project configuration. */
+  id: string;
 }
 
 export function configLayout(c: HarnessConfig): Layout {
@@ -313,6 +324,9 @@ function pathsV2(v: unknown): PathsConfig {
   });
 }
 
+const hooksField = (hooks: HookConfig[] | undefined) =>
+  hooks && hooks.length > 0 ? { hooks } : {};
+
 export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
   file: CONFIG_FILE,
   format: "toml",
@@ -325,6 +339,7 @@ export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
       "agents",
       "sources",
       "skills",
+      "hooks",
     ]);
     const rawPaths = req(o, "paths", "root", (v) => v);
     const backlog = table(
@@ -379,6 +394,14 @@ export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
             });
           }),
         ) ?? [],
+      ...hooksField(
+        opt(
+          o,
+          "hooks",
+          "root",
+          list((v, at) => ({ id: req(table(v, at, ["id"]), "id", at, str) })),
+        ),
+      ),
     };
   },
 
@@ -399,6 +422,7 @@ export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
       skills: c.skills.map((k) =>
         compact({ id: k.id, source: k.source, ref: k.reference, type: k.pageType }),
       ),
+      ...(c.hooks?.length ? { hooks: c.hooks.map((h) => ({ id: h.id })) } : {}),
     };
   },
 
@@ -424,6 +448,14 @@ export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
       "skill",
       c.skills.map((s) => s.id),
     );
+    unique(
+      p,
+      "hook",
+      (c.hooks ?? []).map((h) => h.id),
+    );
+    for (const h of c.hooks ?? []) {
+      if (h.id === "" || /\p{Cc}/u.test(h.id)) p.push(`hook id \`${h.id}\` is invalid`);
+    }
 
     for (const s of c.sources) {
       if (!isSlug(s.id)) p.push(`source id \`${s.id}\` must be a slug`);

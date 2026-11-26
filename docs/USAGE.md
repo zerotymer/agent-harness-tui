@@ -35,7 +35,7 @@ agent-harness-tui
 - Every screen shows a header with the project root and the configuration in use (`project.json`, or the built-in `default.json`, with its `catalog_version`).
 - It needs an interactive terminal on both stdin and stdout. Otherwise it exits immediately with code 2 instead of waiting.
 - `agent-harness-tui --version` prints the version, and `--help` prints usage.
-- An already initialized project (with `harness.toml`) only shows a summary and a no-change check (see "Running again").
+- An already initialized project (with `harness.toml`) shows a summary and a no-change check, and offers only adding skills and hooks (see "Running again").
 
 ## The five steps
 
@@ -77,7 +77,7 @@ The tool changes existing files only inside managed blocks that start with `agen
   - **Type:** optional Wiki.js path prefix such as `skill` or `claude/hook`.
   - **Fetching:** enter a page UUID and press [조회] (fetch). The network is used only at that moment. The request times out after 15 seconds; the key bar shows 처리 중… (working) and other keys are ignored until the response arrives.
   - **Content:** English and Korean pages become `SKILL.md` and `SKILL_ko.md`, unchanged. If one language is missing, you must accept a partial import. The tool never creates a missing translation.
-  - **List:** [목록 불러오기] (load list) works for local folders only. Picking a wiki skill from the configuration list is not supported yet; [카탈로그 보기] (view catalogs) lists the wiki skills with their UUIDs so you can type one in.
+  - **List:** [목록 불러오기] (load list) shows `wiki_skills` from the project configuration. Picking one fills its UUID, type and skill name; archived and already imported entries are blocked. You can also type a UUID.
 
 ## Project configuration
 
@@ -85,7 +85,7 @@ The TUI reads `project.json` from the project root. Without it, it reads `defaul
 
 A file with an unknown key, an unsupported `schema_version`, a duplicate `id`, an option-like value or an empty argument vector is rejected. An invalid `project.json` is shown as an error and the TUI does not fall back to `default.json`; fix the file and run again.
 
-[카탈로그 보기] (view catalogs) on the skills step shows the lists. Public skills show available, unavailable (no `npx`), conflict or manual install. Wiki skills, documents and hooks are listed only for now; importing them from the list and downloading documents come later.
+[카탈로그 보기] (view catalogs) on the skills step shows the lists. Public skills show available, unavailable (no `npx`), conflict or manual install. Wiki skills, documents and hooks are listed only here: wiki skills are imported with [목록 불러오기] (load list) on the wiki source, hooks are added with [훅 추가] (add hooks), and downloading documents comes later.
 
 ## Agents
 
@@ -119,9 +119,14 @@ Checked with skills CLI 1.9.0 (2026-11-23): `npx skills add anthropics/skills@<c
 
 ## Running again
 
-A `harness.toml` written with schema 1 (with `output`) is still read: `output` becomes `artifacts` with the same value, so an existing `.output/` stays in use. Because an initialized project is check-only for now, the file is rewritten as schema 2 only by a later apply.
+A `harness.toml` written with schema 1 (with `output`) is still read: `output` becomes `artifacts` with the same value, so an existing `.output/` stays in use. It is rewritten as schema 2 by the next apply, for example when you add a skill or a hook.
 
-When `harness.toml` exists, the tool shows a summary and checks whether the files still match the settings. It never applies changes in this mode. Adding or updating skills comes in a later stage. Running the same initialization again never duplicates blocks, skills or ignore rules.
+When `harness.toml` exists, the tool shows a summary and checks whether the files still match the settings. Paths and agents cannot change here. If the check finds no conflict, two buttons are offered:
+
+- **[스킬 추가] (add skills)** opens the sources and skills screen with the recorded paths and agents: a local folder, a wiki skill (the list button shows `wiki_skills` from the configuration; archived and already imported ones are blocked) or a public skill. Esc returns to the check.
+- **[훅 추가] (add hooks)** lists the configuration's `hooks`. The picked IDs are recorded in `harness.toml`, and the guidance gets a "Hooks (reference)" section that tells you to add the hooks you use to the agent's own settings and adjust them there. Nothing is installed or run.
+
+Both go through the preview and apply as usual and only add; skills already installed cannot be added again, and updating or removing skills comes later. Running the same initialization again never duplicates blocks, skills or ignore rules.
 
 ## Recovery
 

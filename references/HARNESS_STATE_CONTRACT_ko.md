@@ -70,13 +70,16 @@ type = "skill"                  # 선택, wiki-gateway 전용
 id = "local-one"
 source = "vendored"
 ref = "local-one"               # 로컬 소스 기준 상대 디렉터리
+
+[[hooks]]                       # 선택: 훅 참고 항목(지시서 0026)
+id = "claude-code-hooks"        # 프로젝트 구성의 훅 id. 아무것도 설치하지 않음
 ```
 
 `.skills/`는 고정이므로 저장하지 않는다. 선택 경로 키가 없으면 그 경로는 사용하지 않는다. 어떤 경로에도 이름 형식을 강제하지 않는다(이슈 #36). 검증 규칙은 다음과 같다.
 
 - `paths.instructions`는 필수다. 관리 경로끼리 중복(대소문자 무시)되거나 중첩되면 안 된다.
 - `backlog.path`는 `agent.db`여야 한다.
-- 에이전트·소스·스킬·동적 스킬 ID는 고유해야 한다. 동적 참조 문서 경로는 고유해야 한다.
+- 에이전트·소스·스킬·동적 스킬·훅 ID는 고유해야 한다. 동적 참조 문서 경로는 고유해야 한다. `hooks`는 항목이 있을 때만 쓴다.
 - `[service]`: `url`은 `https://`이며, 루프백 주소만 `http://`를 허용한다. `project`는 슬러그다. `token_env`는 `[A-Z_][A-Z0-9_]*` 형식이다.
 - `dynamic_skills`와 `dynamic_references`에는 `[service]`가 있어야 한다. 동적 스킬 ID는 슬러그이며 스킬 ID와 같으면 안 된다(대소문자 무시).
 - `local-dir`에는 `path`가 필요하고 `token_env`는 쓸 수 없다.

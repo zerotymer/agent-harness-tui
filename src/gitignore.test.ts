@@ -26,7 +26,10 @@ function tempDir() {
     git: (...args: string[]) => {
       const out = spawnSync("git", ["-C", dir, ...args], {
         encoding: "utf8",
-        env: { ...process.env, GIT_CONFIG_GLOBAL: os.devNull },
+        env: {
+          ...process.env,
+          GIT_CONFIG_GLOBAL: "/dev/null" /* Git for Windows maps this; it cannot read \\.\nul */,
+        },
       });
       assert.equal(out.status, 0, `git ${args.join(" ")}: ${out.stderr}`);
       return out.stdout;

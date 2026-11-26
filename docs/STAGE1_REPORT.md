@@ -1,5 +1,7 @@
 # Stage 1 verification report
 
+> 2026-11-26: the implementation moved to Node.js (TypeScript + Ink, instruction 0025) and the Rust crate was removed. This report is kept as the record of the Rust build that was accepted; the same 11 acceptance checks now run as `src/stage1.test.ts`.
+
 Date: 2026-11-16. Scope: instructions 0001–0011, built on `main` at `bdafb75` plus the 0011 branch. Spec: [`references/STEP_1_INITIAL_CREATION.md`](../references/STEP_1_INITIAL_CREATION.md) §8.
 
 ## Environment

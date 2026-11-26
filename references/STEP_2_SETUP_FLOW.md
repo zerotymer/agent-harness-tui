@@ -137,6 +137,7 @@ The `agent.db` rules from the Stage 1 spec §2 do not change.
 - With no `sha256`, warn and continue. When `sha256` is present and does not match, do not save the file, and warn.
 - An existing file with different content is a conflict. It is never overwritten.
 - The download is recorded in `harness.lock.json`.
+- **Flow** (instruction 0028, 2026-11-27): documents are picked in the catalog view, which is also reachable while adding to an initialized project. Nothing is fetched while picking; the picked documents are downloaded just before the preview (with an explicit `User-Agent` and a 30 s timeout). A failed download or a `sha256` mismatch is shown on the preview and left out; the rest still applies. A document already in the lock cannot be picked again; updating or removing downloads comes later.
 
 ### 6.4 Hooks (`hooks`)
 

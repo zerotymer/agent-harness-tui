@@ -392,7 +392,8 @@ test("catalog view shows the configuration lists and returns", async () => {
   for (const want of [
     "공개 스킬 3개",
     "위키 스킬 5개 (목록만)",
-    "문서 1개 (목록만)",
+    "문서 1개 (참조 문서 경로에 저장)",
+    "[내려받기 가능] anthropics-skills-readme",
     "훅 1개 (참고용)",
     "wiki-skill-import",
     "직접 실행: claude plugin",
@@ -404,6 +405,84 @@ test("catalog view shows the configuration lists and returns", async () => {
   assert.equal(w.step, "skills");
   assert.equal(w.focus, SK_CATALOGS);
   assert.equal(p.files(), 0, "viewing catalogs writes nothing");
+});
+
+test("documents are downloaded before the preview and recorded in the lock", async () => {
+  using p = project();
+  const body = "# README\n";
+  const urls: string[] = [];
+  const w = await p.wizard();
+  w.fetchDoc = async (url) => {
+    urls.push(String(url));
+    return new Response(body);
+  };
+  await press(w, "enter", 2);
+  w.focus = SK_CATALOGS;
+  await press(w, "enter");
+  w.focus = 3; // first doc row after the three public skills
+  await press(w, "enter");
+  assert.match(screen(w), /\[선택됨\] anthropics-skills-readme/);
+  assert.equal(urls.length, 0, "nothing is downloaded while picking");
+  await press(w, "esc");
+  assert.match(screen(w), /문서 1개 선택/);
+  w.focus = SK_KIND;
+  await press(w, "enter"); // preview
+  assert.equal(urls.length, 1);
+  assert.match(screen(w), /references\/anthropics-skills-README\.md/);
+  assert.match(screen(w), /not verified/, "no sha256 is a warning");
+  await press(w, "enter");
+  assert.equal(w.step, "done", screen(w));
+  assert.equal(p.read("references/anthropics-skills-README.md"), body);
+  const lock = JSON.parse(p.read("harness.lock.json"));
+  assert.equal(lock.docs[0].id, "anthropics-skills-readme");
+  assert.equal(lock.docs[0].path, "references/anthropics-skills-README.md");
+  assert.match(lock.docs[0].hash, /^sha256:[0-9a-f]{64}$/);
+
+  // Downloaded once: the catalog shows it and it cannot be picked again.
+  const again = await p.wizard();
+  assert.equal(again.step, "verify");
+  assert.match(screen(again), /검증: 설정과 파일이 일치합니다/);
+});
+
+test("documents never overwrite other files and need the references path", async () => {
+  using p = project();
+  fs.mkdirSync(p.abs("references"));
+  fs.writeFileSync(p.abs("references/anthropics-skills-README.md"), "mine\n");
+  const w = await p.wizard();
+  w.fetchDoc = async () => new Response("# README\n");
+  await press(w, "enter", 2);
+  w.focus = SK_CATALOGS;
+  await press(w, "enter");
+  w.focus = 3;
+  await press(w, "enter");
+  await press(w, "esc");
+  w.focus = SK_KIND;
+  await press(w, "enter"); // preview
+  assert.match(screen(w), /충돌 1개/);
+  await press(w, "enter");
+  assert.notEqual(w.step, "done");
+  assert.equal(p.read("references/anthropics-skills-README.md"), "mine\n");
+
+  // A failed download is left out and reported; the rest still applies.
+  w.fetchDoc = async () => new Response("x", { status: 500 });
+  await press(w, "esc");
+  w.focus = SK_KIND;
+  await press(w, "enter");
+  assert.match(screen(w), /문서 제외: .*HTTP 500/);
+  assert.doesNotMatch(screen(w), /충돌/);
+
+  // Without a references path nothing can be picked.
+  using q = project();
+  const v = await q.wizard();
+  await press(v, "enter");
+  v.references = "";
+  await press(v, "enter");
+  v.focus = SK_CATALOGS;
+  await press(v, "enter");
+  v.focus = 3;
+  await press(v, "enter");
+  assert.match(screen(v), /\[사용 불가\] anthropics-skills-readme/);
+  assert.match(v.message ?? "", /참조 문서 경로/);
 });
 
 async function toInstall(w: Wizard, i: number) {

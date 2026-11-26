@@ -21,6 +21,7 @@ import {
   toText,
   validate,
 } from "./contract.js";
+import type { Downloaded } from "./docs.js";
 import * as gitignore from "./gitignore.js";
 import * as guidance from "./guidance.js";
 import {
@@ -83,6 +84,7 @@ export async function prepare(
   imports: PendingImport[],
   agents: AgentEntry[] = builtinAgents(),
   hooks: HookEntry[] = [],
+  downloads: Downloaded[] = [],
 ): Promise<Prepared> {
   validate(HARNESS_CONFIG, config);
   const errs = validateLayout(configLayout(config), root);
@@ -118,6 +120,16 @@ export async function prepare(
     }
   }
   desired.push(...imported);
+  if (downloads.length > 0 && !references) {
+    throw new Error("문서를 내려받으려면 참조 문서 경로를 사용해야 합니다.");
+  }
+  for (const d of downloads) {
+    // Owned file: an existing file with other content is a conflict, never overwritten.
+    const path = (references as RelPath).join(d.entry.filename);
+    desired.push(apply.fileItem(path, d.bytes));
+    const docs = (lock.docs ?? []).filter((x) => x.id !== d.entry.id);
+    lock = { ...lock, docs: [...docs, { id: d.entry.id, url: d.entry.url, path, hash: d.hash }] };
+  }
 
   const placed = placement.planPlacement(root, config, lock, loaded.state, imported, agents);
   desired.push(...placed.desired);

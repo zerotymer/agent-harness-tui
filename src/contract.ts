@@ -521,9 +521,21 @@ export interface LockedSkill {
   files: LockedFile[];
 }
 
+/** A downloaded document (catalog `docs`), saved under the references path. */
+export interface LockedDoc {
+  id: string;
+  url: string;
+  /** Project-relative, below the references path. */
+  path: RelPath;
+  /** `sha256:<hex>` of the saved bytes. */
+  hash: string;
+}
+
 export interface HarnessLock {
   schemaVersion: number;
   skills: LockedSkill[];
+  /** Absent or empty: nothing downloaded; written only when non-empty. */
+  docs?: LockedDoc[];
 }
 
 export function defaultLock(): HarnessLock {
@@ -535,8 +547,23 @@ export const HARNESS_LOCK: ContractSpec<HarnessLock> = {
   format: "json",
 
   decode(doc) {
-    const o = table(doc, "root", ["schema_version", "skills"]);
+    const o = table(doc, "root", ["schema_version", "skills", "docs"]);
+    const docs = opt(
+      o,
+      "docs",
+      "root",
+      list((v, at) => {
+        const d = table(v, at, ["id", "url", "path", "hash"]);
+        return {
+          id: req(d, "id", at, str),
+          url: req(d, "url", at, str),
+          path: req(d, "path", at, rel),
+          hash: req(d, "hash", at, str),
+        };
+      }),
+    );
     return {
+      ...(docs?.length ? { docs } : {}),
       schemaVersion: SCHEMA_VERSION, // version 1 is upgraded in memory
       skills:
         opt(
@@ -589,11 +616,35 @@ export const HARNESS_LOCK: ContractSpec<HarnessLock> = {
           ),
         }),
       ),
+      ...(l.docs?.length
+        ? {
+            docs: l.docs.map((d) => ({
+              id: d.id,
+              url: d.url,
+              path: d.path.toString(),
+              hash: d.hash,
+            })),
+          }
+        : {}),
     };
   },
 
   problems(l) {
     const p: string[] = [];
+    const docs = l.docs ?? [];
+    unique(
+      p,
+      "doc",
+      docs.map((d) => d.id),
+    );
+    unique(
+      p,
+      "doc path",
+      docs.map((d) => d.path.toString()),
+    );
+    for (const d of docs) {
+      if (!isSha256(d.hash)) p.push(`doc \`${d.id}\`: hash must be sha256:<64 hex>`);
+    }
     unique(
       p,
       "skill",

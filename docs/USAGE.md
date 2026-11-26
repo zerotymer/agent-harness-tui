@@ -85,7 +85,7 @@ The TUI reads `project.json` from the project root. Without it, it reads `defaul
 
 A file with an unknown key, an unsupported `schema_version`, a duplicate `id`, an option-like value or an empty argument vector is rejected. An invalid `project.json` is shown as an error and the TUI does not fall back to `default.json`; fix the file and run again.
 
-[카탈로그 보기] (view catalogs) on the skills step shows the lists. Public skills show available, unavailable (no `npx`), conflict or manual install. Wiki skills, documents and hooks are listed only here: wiki skills are imported with [목록 불러오기] (load list) on the wiki source, hooks are added with [훅 추가] (add hooks), and downloading documents comes later.
+[카탈로그 보기] (view catalogs) on the skills step shows the lists. Public skills show available, unavailable (no `npx`), conflict or manual install. Wiki skills and hooks are listed only here: wiki skills are imported with [목록 불러오기] (load list) on the wiki source, and hooks are added with [훅 추가] (add hooks). Documents are picked here with Enter or Space (available, picked, downloaded, or unavailable when the references path is off). The picked ones are downloaded just before the preview and saved as `<references>/<filename>`; a failed download or a `sha256` mismatch is reported on the preview and left out, an entry without `sha256` is saved with a warning, and an existing file with other content is a conflict and is never overwritten. Downloads are recorded in `harness.lock.json` `docs`, and a downloaded document cannot be picked again.
 
 ## Agents
 

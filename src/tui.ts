@@ -18,6 +18,7 @@ import {
   isSlug,
   type Placement,
 } from "./contract.js";
+import * as docs from "./docs.js";
 import type { GitReport } from "./gitignore.js";
 import { groupByGuidance, guidanceFiles } from "./guidance.js";
 import * as init from "./init.js";
@@ -173,6 +174,12 @@ export class Wizard {
    * and agents come from `harness.toml` and cannot change.
    */
   adding = false;
+  /** Catalog `docs` IDs to download before the preview. */
+  docPicks: string[] = [];
+  /** Download results shown on the preview. */
+  docNotes: string[] = [];
+  /** Overridable for tests. */
+  fetchDoc: docs.Fetch = fetch;
   /** The preview came from [지침 갱신]; Esc returns to the check. */
   refreshing = false;
   /** The read-only check of an initialized project, restored when additions are left. */
@@ -331,7 +338,7 @@ export class Wizard {
       case "skills":
         return SK_FIXED_ROWS + this.catalog.length;
       case "catalog":
-        return this.skillsEntries().length;
+        return this.skillsEntries().length + this.docEntries().length;
       case "hooks":
         return this.hookEntries().length;
       default:
@@ -389,6 +396,8 @@ export class Wizard {
       this.fetched = undefined;
     } else if (this.step === "skills" && f === SK_PARTIAL) {
       this.acceptPartial = !this.acceptPartial;
+    } else if (this.step === "catalog" && f >= this.skillsEntries().length) {
+      this.toggleDoc(f - this.skillsEntries().length);
     } else if (this.step === "hooks") {
       const id = this.hookEntries()[f]?.id;
       if (id === undefined) return;
@@ -502,7 +511,9 @@ export class Wizard {
         this.quit = true;
         return;
       case "catalog":
-        if (this.rows() > 0) {
+        if (this.focus >= this.skillsEntries().length) {
+          this.toggleDoc(this.focus - this.skillsEntries().length);
+        } else if (this.rows() > 0) {
           this.installPick = this.focus;
           this.installResult = undefined;
           this.go("install");
@@ -877,6 +888,7 @@ export class Wizard {
 
   private stopAdding() {
     this.adding = false;
+    this.docPicks = [];
     this.refreshing = false;
     this.prepared = this.checked;
     this.imports = [];
@@ -885,7 +897,49 @@ export class Wizard {
     this.step = "verify";
   }
 
+  docEntries(): catalog.DocsEntry[] {
+    return this.project.ok ? this.project.value.config.docs : [];
+  }
+
+  /** Catalog document state; only "available" ones can be picked. */
+  docState(e: catalog.DocsEntry): "사용 불가" | "내려받음" | "선택됨" | "내려받기 가능" {
+    const refs = attempt(() => this.config().paths.references);
+    if (!refs.ok || !refs.value) return "사용 불가";
+    const lock = this.loaded.ok ? (this.loaded.value.lock.docs ?? []) : [];
+    if (lock.some((d) => d.id === e.id)) return "내려받음";
+    return this.docPicks.includes(e.id) ? "선택됨" : "내려받기 가능";
+  }
+
+  private toggleDoc(i: number) {
+    const e = this.docEntries()[i];
+    if (!e) return;
+    const state = this.docState(e);
+    if (state === "사용 불가")
+      this.message = "참조 문서 경로를 사용해야 문서를 내려받을 수 있습니다.";
+    else if (state === "내려받음") this.message = `\`${e.id}\`은 이미 내려받았습니다.`;
+    else
+      this.docPicks =
+        state === "선택됨" ? this.docPicks.filter((x) => x !== e.id) : [...this.docPicks, e.id];
+  }
+
+  /** Downloads picked documents; failures are reported and left out. */
+  private async downloadDocs(): Promise<docs.Downloaded[]> {
+    this.docNotes = [];
+    const got: docs.Downloaded[] = [];
+    for (const e of this.docEntries().filter((x) => this.docPicks.includes(x.id))) {
+      try {
+        const d = await docs.download(e, this.fetchDoc);
+        got.push(d);
+        if (d.warning) this.docNotes.push(`경고: ${d.warning}`);
+      } catch (err) {
+        this.docNotes.push(`문서 제외: ${(err as Error).message}`);
+      }
+    }
+    return got;
+  }
+
   private async openPreview() {
+    const downloads = await this.downloadDocs();
     if (!this.loaded.ok) {
       this.prepared = { ok: false, error: this.loaded.error };
     } else {
@@ -899,6 +953,7 @@ export class Wizard {
             this.imports,
             this.agentEntries(),
             this.hookEntries(),
+            downloads,
           ))(),
       );
     }
@@ -987,7 +1042,7 @@ export class Wizard {
         return "↑↓ 이동  Space 선택  Enter 버튼 실행·다음  Esc 이전  Ctrl+C 취소";
       case "catalog":
         return this.rows() > 0
-          ? "↑↓ 공개 스킬 선택  PgUp PgDn 스크롤  Enter 설치 확인 화면  Esc 돌아가기"
+          ? "↑↓ 이동  Enter 스킬 설치 확인·문서 선택  Space 문서 선택  Esc 돌아가기"
           : "PgUp PgDn 스크롤  Enter·Esc 돌아가기  q 종료";
       case "install":
         return "Enter 확인·실행  Esc 돌아가기  q 종료";
@@ -1224,7 +1279,10 @@ export class Wizard {
       this.row(SK_PARTIAL, `${check(this.acceptPartial)} 한 언어만 있어도 부분 가져오기 수락`),
       this.row(SK_ADD, "[추가] 선택 목록에 넣기"),
       this.row(SK_LIST, this.wiki ? "[목록 불러오기] 로컬 폴더만" : "[목록 불러오기]"),
-      this.row(SK_CATALOGS, "[카탈로그 보기] 위키·스킬·문서의 출처·버전·상태"),
+      this.row(
+        SK_CATALOGS,
+        `[카탈로그 보기] 공개 스킬 설치·문서 내려받기 (문서 ${this.docPicks.length}개 선택)`,
+      ),
       this.row(SK_HOOKS, `[훅 추가] 참고 항목 선택 (${this.hooks.length}개 선택)`),
     ];
     if (this.wiki && !this.storedToken.ok) {
@@ -1267,6 +1325,7 @@ export class Wizard {
       raw(""),
       ...textLines(preview(p.value.plan)),
       ...p.value.warnings.map((w) => raw(`경고: ${w}`)),
+      ...this.docNotes.map(raw),
       raw(""),
       ...gitLines(p.value.git),
     ];
@@ -1330,7 +1389,10 @@ export class Wizard {
   }
 
   private catalogLines(): Line[] {
-    const v = [raw("프로젝트 구성만 읽습니다. 네트워크로 내려받지 않습니다."), raw("")];
+    const v = [
+      raw("목록은 프로젝트 구성에서 읽습니다. 고른 문서는 미리보기 직전에 내려받습니다."),
+      raw(""),
+    ];
     if (!this.project.ok) {
       v.push({ text: `구성 오류: ${this.project.error}`, bold: true });
       return v;
@@ -1350,19 +1412,20 @@ export class Wizard {
       if (e.installer === SKILLS_CLI) v.push(raw(`      스킬: ${e.skill ?? "*"}`));
       else if (e.install) v.push(raw(`      직접 실행: ${e.install}`));
     });
-    // Listed only here: wiki skills are imported from the skills step, hooks are
-    // added with [훅 추가], and document downloads come later (0022 item 5).
+    // Wiki skills are imported from the skills step and hooks are added with
+    // [훅 추가]; documents are picked here and downloaded before the preview.
     v.push(raw(""), { text: `위키 스킬 ${c.wikiSkills.length}개 (목록만)`, bold: true });
     for (const e of c.wikiSkills) {
       const archived = e.status === "archived" ? "  (보관됨)" : "";
       v.push(raw(`  ${e.id}  ${display(e.title)}  (type ${e.pageType})${archived}`));
       v.push(raw(`      ${e.uuid}`));
     }
-    v.push(raw(""), { text: `문서 ${c.docs.length}개 (목록만)`, bold: true });
-    for (const e of c.docs) {
-      v.push(raw(`  ${e.id}  ${display(e.title)}  → ${e.filename}`));
-      v.push(raw(`      ${e.url}`));
-    }
+    v.push(raw(""), { text: `문서 ${c.docs.length}개 (참조 문서 경로에 저장)`, bold: true });
+    c.docs.forEach((e, i) => {
+      const at = c.skills.length + i;
+      v.push(this.row(at, `[${this.docState(e)}] ${e.id}  ${display(e.title)}  → ${e.filename}`));
+      v.push(raw(`      ${e.url}${e.sha256 ? "" : "  (sha256 없음: 검증하지 않음)"}`));
+    });
     v.push(raw(""), { text: `훅 ${c.hooks.length}개 (참고용)`, bold: true });
     for (const e of c.hooks) {
       v.push(raw(`  ${e.id}  ${display(e.title)}${e.summary ? `  ${display(e.summary)}` : ""}`));

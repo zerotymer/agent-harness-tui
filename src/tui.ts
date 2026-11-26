@@ -7,6 +7,7 @@
 // access (skill fetch) happens only when the user activates a button.
 // Nothing is written before the explicit apply on the preview step.
 
+import fs from "node:fs";
 import { type Detection, detectAll, installRequest } from "./agents.js";
 import { type ApplyReport, conflicts, hasWrites, preview } from "./apply.js";
 import * as catalog from "./catalog.js";
@@ -23,6 +24,7 @@ import type { GitReport } from "./gitignore.js";
 import { groupByGuidance, guidanceFiles } from "./guidance.js";
 import * as init from "./init.js";
 import * as install from "./install.js";
+import { SKILLS_LOCK } from "./install.js";
 import { LOCAL_FILE, loadToken, Secret, saveToken } from "./local.js";
 import {
   backlogPath,
@@ -30,7 +32,7 @@ import {
   type HiddenAttr,
   type Layout,
   type ProjectRoot,
-  type RelPath,
+  RelPath,
   skillsDir,
   validateLayout,
 } from "./paths.js";
@@ -51,6 +53,8 @@ export type Step =
   | "catalog"
   /** Confirmation screen for one public skill install. */
   | "install"
+  /** `npx skills update -p` confirmation (instruction 0029). */
+  | "update"
   /** Hook reference entries to add (instruction 0026). */
   | "hooks";
 
@@ -334,7 +338,7 @@ export class Wizard {
       case "agents":
         return this.agents.length * 2 + 2;
       case "verify":
-        return this.canAdd() ? (this.guidanceStale() ? 3 : 2) : 0;
+        return this.verifyActions().length;
       case "skills":
         return SK_FIXED_ROWS + this.catalog.length;
       case "catalog":
@@ -450,6 +454,10 @@ export class Wizard {
         this.focus = this.installPick;
         this.step = "catalog";
         return;
+      case "update":
+        this.focus = this.verifyActions().indexOf("update");
+        this.step = "verify";
+        return;
     }
   }
 
@@ -463,11 +471,22 @@ export class Wizard {
   private async enter() {
     switch (this.step) {
       case "verify":
-        if (!this.canAdd()) this.quit = true;
-        else if (this.focus === 0) this.startAdding("skills");
-        else if (this.focus === 1) this.startAdding("hooks");
-        else return this.refreshGuidance();
-        return;
+        switch (this.verifyActions()[this.focus]) {
+          case "skills":
+            return this.startAdding("skills");
+          case "hooks":
+            return this.startAdding("hooks");
+          case "guidance":
+            return this.refreshGuidance();
+          case "update":
+            this.installResult = undefined;
+            return this.go("update");
+          default:
+            this.quit = true;
+            return;
+        }
+      case "update":
+        return this.confirmUpdate();
       case "hooks":
         this.back();
         return;
@@ -864,6 +883,35 @@ export class Wizard {
     if (first === "hooks") this.go("hooks");
   }
 
+  /** Buttons on the check screen, in order. */
+  verifyActions(): ("skills" | "hooks" | "guidance" | "update")[] {
+    const a: ("skills" | "hooks" | "guidance" | "update")[] = [];
+    if (this.canAdd()) a.push("skills", "hooks");
+    if (this.guidanceStale()) a.push("guidance");
+    // Skills the skills CLI installed in this project; it owns their files.
+    if (
+      this.initialized() &&
+      this.project.ok &&
+      fs.existsSync(this.root.abs(RelPath.unchecked(SKILLS_LOCK)))
+    ) {
+      a.push("update");
+    }
+    return a;
+  }
+
+  private confirmUpdate() {
+    if (!this.npx) {
+      this.message = `\`${install.NPX}\`를 찾을 수 없어 갱신할 수 없습니다.`;
+      return;
+    }
+    this.pending = {
+      kind: "skill",
+      requests: [{ program: this.npx, args: install.UPDATE_ARGS }],
+      rows: [],
+    };
+    this.message = undefined;
+  }
+
   /** Guidance blocks the check would rewrite (rendered text differs, no conflict). */
   guidanceStale(): boolean {
     const p = this.prepared;
@@ -1008,6 +1056,7 @@ export class Wizard {
     if (this.step === "agentInstall") return `${base} ─ 설치 확인`;
     if (this.step === "hooks") return `${base} ─ 훅 추가`;
     if (this.step === "verify") return "초기화된 프로젝트";
+    if (this.step === "update") return "초기화된 프로젝트 ─ 스킬 갱신";
     return base;
   }
 
@@ -1045,6 +1094,7 @@ export class Wizard {
           ? "↑↓ 이동  Enter 스킬 설치 확인·문서 선택  Space 문서 선택  Esc 돌아가기"
           : "PgUp PgDn 스크롤  Enter·Esc 돌아가기  q 종료";
       case "install":
+      case "update":
         return "Enter 확인·실행  Esc 돌아가기  q 종료";
       default:
         return "↑↓ 이동  Space 선택  Enter 다음  Esc 이전  Ctrl+C 취소";
@@ -1063,6 +1113,7 @@ export class Wizard {
       done: () => this.resultLines(),
       catalog: () => this.catalogLines(),
       install: () => this.installLines(),
+      update: () => this.updateLines(),
       hooks: () => this.hookLines(),
     }[this.step]();
     if (this.message) v.push(raw(""), { text: this.message, bold: true });
@@ -1139,8 +1190,10 @@ export class Wizard {
       const e = this.hookEntries().find((x) => x.id === h.id);
       v.push(raw(`훅(참고): ${e ? display(e.title) : `${h.id} (알 수 없음)`}`));
     }
+    const actions = this.verifyActions();
+    if (actions.length > 0) v.push(raw(""), raw("작업:"));
     if (this.canAdd()) {
-      v.push(raw(""), raw("추가 작업 (기존 내용은 바꾸지 않고 더하기만 합니다):"));
+      v.push(raw("추가 작업은 기존 내용을 바꾸지 않고 더하기만 합니다."));
       v.push(this.row(0, "[스킬 추가] 로컬 폴더·위키·공개 스킬"));
       v.push(this.row(1, "[훅 추가] 참고 항목 기록과 안내"));
       if (this.guidanceStale()) {
@@ -1150,6 +1203,13 @@ export class Wizard {
         );
         v.push(this.row(2, "[지침 갱신] 관리 블록 다시 쓰기 (미리보기 후 적용)"));
       }
+    }
+    const u = actions.indexOf("update");
+    if (u >= 0) {
+      v.push(
+        raw(""),
+        this.row(u, "[스킬 갱신] skills CLI로 설치한 프로젝트 스킬 (npx skills update -p)"),
+      );
     }
     return v;
   }
@@ -1431,6 +1491,32 @@ export class Wizard {
       v.push(raw(`  ${e.id}  ${display(e.title)}${e.summary ? `  ${display(e.summary)}` : ""}`));
       if (e.url) v.push(raw(`      ${e.url}`));
     }
+    return v;
+  }
+
+  private updateLines(): Line[] {
+    const v = [
+      raw(`${SKILLS_LOCK}가 있어 skills CLI로 설치한 프로젝트 스킬을 갱신합니다.`),
+      raw(""),
+      raw("실행할 명령 (셸 없이, 프로젝트 루트에서):"),
+      raw(`  ${install.display({ program: this.npx ?? install.NPX, args: install.UPDATE_ARGS })}`),
+      raw(""),
+    ];
+    if (!this.npx) {
+      v.push(raw(`사용 불가: PATH에서 \`${install.NPX}\`를 찾을 수 없습니다.`));
+    } else {
+      v.push(raw("Enter를 누르면 TUI 화면을 잠시 닫고 터미널을 skills CLI에 넘깁니다."));
+      v.push(raw("-p: 프로젝트 스킬만 갱신합니다. 사용자 전역 스킬은 건드리지 않습니다."));
+      v.push(
+        raw(
+          "갱신 대상과 파일은 skills CLI와 skills-lock.json이 관리하며, 하네스는 소유하지 않습니다.",
+        ),
+      );
+      v.push(raw("미리 보려면 터미널에서 `npx skills check`를 실행하세요(읽기 전용)."));
+    }
+    const r = this.installResult;
+    if (r?.ok) v.push(raw(""), raw(`결과: ${exitText(r.value)}`));
+    else if (r) v.push(raw(""), raw(`결과: 실행하지 못함 (${r.error})`));
     return v;
   }
 

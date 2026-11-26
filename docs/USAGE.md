@@ -126,8 +126,9 @@ When `harness.toml` exists, the tool shows a summary and checks whether the file
 - **[스킬 추가] (add skills)** opens the sources and skills screen with the recorded paths and agents: a local folder, a wiki skill (the list button shows `wiki_skills` from the configuration; archived and already imported ones are blocked) or a public skill. Esc returns to the check.
 - **[훅 추가] (add hooks)** lists the configuration's `hooks`. The picked IDs are recorded in `harness.toml`, and the guidance gets a "Hooks (reference)" section that tells you to add the hooks you use to the agent's own settings and adjust them there. Nothing is installed or run.
 - **[지침 갱신] (refresh guidance)** appears only when a guidance block differs from what the current configuration renders, for example after a newer version of this tool or after `project.json` renamed a hook. It rewrites the managed blocks after the preview; your text outside the blocks is kept. Esc on the preview returns to the check without writing. A block you edited yourself is a conflict, and then no button is offered.
+- **[스킬 갱신] (update skills)** appears when `skills-lock.json` exists, that is when the skills CLI installed project skills. It shows `npx skills update -p` (project skills only) and, after Enter, hands the terminal to the CLI and reports the exit code; press Enter to come back. The CLI owns those files. Run `npx skills check` yourself for a read-only look first.
 
-All of them go through the preview and apply as usual and only add; skills already installed cannot be added again, and updating or removing skills comes later. Running the same initialization again never duplicates blocks, skills or ignore rules.
+Adding and refreshing go through the preview and apply as usual and only add; skills already installed cannot be added again, and removing skills comes later. Running the same initialization again never duplicates blocks, skills or ignore rules.
 
 ## Recovery
 

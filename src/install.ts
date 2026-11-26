@@ -30,6 +30,15 @@ export function args(entry: SkillsEntry): string[] | undefined {
   return out;
 }
 
+/** The skills CLI's project lock file; its presence means CLI-installed project skills. */
+export const SKILLS_LOCK = "skills-lock.json";
+
+/**
+ * Updates project skills only (`-p`; skills CLI 1.9.0 docs, checked
+ * 2026-11-27). No `-y`: the CLI's own prompts stay with the user.
+ */
+export const UPDATE_ARGS = ["skills", "update", "-p"];
+
 /** `unknown`: installing every skill, so names are not known in advance. */
 export type Conflict = { kind: "none" } | { kind: "with"; name: string } | { kind: "unknown" };
 

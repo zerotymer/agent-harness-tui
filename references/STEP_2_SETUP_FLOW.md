@@ -123,6 +123,7 @@ The `agent.db` rules from the Stage 1 spec §2 do not change.
 - The Stage 2 skill install rules written on 2026-11-23 stay (instruction 0021): `npx skills add <source> [-s <skill>]`, no `-a`, `-g` or `-y`, an argument vector without a shell, `npx.cmd` on Windows, the name conflict check, and the full command on the confirmation screen.
 - **Terminal handover:** on confirm, the TUI leaves raw mode and the alternate screen and runs the command with inherited stdin, stdout and stderr. When it exits, the TUI waits for Enter, restores its screen and shows the exit code. Agent installs (§3) use the same handover.
 - **Updates:** the TUI offers an update action for installed skills through the skills CLI. The CLI's update command and its scope are verified against the official documentation before implementation. The update runs only after confirmation. There is no background scheduler.
+  - Implemented (instruction 0029, 2026-11-27; skills CLI 1.9.0 docs): when `skills-lock.json` exists in the project root, the check screen of an initialized project offers [스킬 갱신] (update skills). It shows `npx skills update -p` (project skills only; no `-y`, so the CLI's own prompts reach the user) and runs it with the terminal handed over after Enter, then reports the exit code. This button does not need a conflict-free check: the skills CLI owns those files, and the harness never reads or writes `skills-lock.json`. `npx skills check` is mentioned as a read-only preview the user can run.
 - Entries with an `installer` other than `skills-cli` show their `install` text for the user to run.
 
 ### 6.2 Wiki skills (`wiki_skills`, static)
@@ -188,6 +189,6 @@ The application changes, `catalog/default.json`, focused tests, bilingual usage 
 
 ## To verify before implementation
 
-- The skills CLI update command and its scope.
+- ~~The skills CLI update command and its scope.~~ Verified 2026-11-27 (skills CLI 1.9.0): `skills update [-g|-p] [-y] [skills...]`, `skills check`.
 - The project MCP configuration format for each agent.
 - The content service contract v1, from the service project.

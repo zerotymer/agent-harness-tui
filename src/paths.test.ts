@@ -29,11 +29,11 @@ function tempProject(): string {
   return dir;
 }
 
-function layout(references: string, output: string): Layout {
+function layout(references: string, artifacts: string): Layout {
   return {
     ...defaultLayout(),
     references: RelPath.parse(references),
-    output: RelPath.parse(output),
+    artifacts: RelPath.parse(artifacts),
   };
 }
 
@@ -128,11 +128,14 @@ test("default layout is valid and derives fixed paths", () => {
   assert.equal(root.abs(completedLog(l)), path.join(root.path, "instructions", "completed.log"));
 });
 
-test("output must be dot-prefixed", () => {
+test("any name is accepted and disabled paths are not checked", () => {
   const root = new ProjectRoot(tempProject());
-  const errs = validateLayout(layout("references", "build/out"), root);
-  assert.ok(has(errs, "output-not-dot-prefixed", "build/out"));
-  assert.deepEqual(validateLayout(layout("references", "build/.out"), root), []);
+  assert.deepEqual(validateLayout(layout("references", "build/out"), root), []);
+  // A disabled path cannot collide or nest.
+  const l: Layout = { instructions: RelPath.parse("instructions"), backlogEnabled: false };
+  fs.writeFileSync(path.join(root.path, "references"), "a file");
+  assert.deepEqual(validateLayout(l, root), []);
+  assert.ok(has(validateLayout(layout("references", ".a"), root), "collision", "references"));
 });
 
 test("rejects duplicates case-insensitively", () => {

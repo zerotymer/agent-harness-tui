@@ -8,9 +8,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
-import { BACKLOG_FILE, backlogPath, defaultLayout, type Layout, RelPath } from "./paths.js";
+import {
+  BACKLOG_FILE,
+  backlogPath,
+  DEFAULT_REFERENCES_DIR,
+  defaultLayout,
+  type Layout,
+  RelPath,
+} from "./paths.js";
 
-export const SCHEMA_VERSION = 1;
+/** Written by this version. Version 1 files are still read and upgraded in memory. */
+export const SCHEMA_VERSION = 2;
+const READABLE_VERSIONS = [1, 2];
 export const CONFIG_FILE = "harness.toml";
 export const LOCK_FILE = "harness.lock.json";
 export const STATE_FILE = ".harness/state.json";
@@ -118,7 +127,8 @@ function compact<T extends object>(o: T): T {
 interface ContractSpec<T> {
   file: string;
   format: "toml" | "json";
-  decode(doc: Obj): T;
+  /** `version` is the file's (readable) schema version; the result is the current version. */
+  decode(doc: Obj, version: number): T;
   encode(value: T): Obj;
   problems(value: T): string[];
 }
@@ -145,7 +155,7 @@ export function fromText<T>(spec: ContractSpec<T>, text: string): T {
   } catch (e) {
     throw fail((e as Error).message);
   }
-  if (found !== SCHEMA_VERSION) {
+  if (!READABLE_VERSIONS.includes(found)) {
     throw new ContractError(
       "unsupported-version",
       spec.file,
@@ -156,7 +166,7 @@ export function fromText<T>(spec: ContractSpec<T>, text: string): T {
   }
   let value: T;
   try {
-    value = spec.decode(doc as Obj);
+    value = spec.decode(doc as Obj, found);
   } catch (e) {
     if (e instanceof DecodeError) throw fail(e.message);
     throw e;
@@ -204,11 +214,12 @@ export type AgentId = string;
 export type Placement = "copy" | "reference";
 export type SourceKind = "local-dir" | "wiki-gateway";
 
+/** `instructions` is required; an absent optional path is disabled. */
 export interface PathsConfig {
-  /** Absent in configs written before it became configurable. */
   instructions: RelPath;
-  references: RelPath;
-  output: RelPath;
+  artifacts?: RelPath;
+  docs?: RelPath;
+  references?: RelPath;
 }
 
 export interface BacklogConfig {
@@ -257,7 +268,12 @@ export function defaultConfig(): HarnessConfig {
   const l = defaultLayout();
   return {
     schemaVersion: SCHEMA_VERSION,
-    paths: { instructions: l.instructions, references: l.references, output: l.output },
+    paths: compact({
+      instructions: l.instructions,
+      artifacts: l.artifacts,
+      docs: l.docs,
+      references: l.references,
+    }),
     backlog: { enabled: false, path: backlogPath(l) },
     agents: [],
     sources: [],
@@ -272,11 +288,36 @@ function agentId(v: unknown, at: string): AgentId {
   return s;
 }
 
+/**
+ * Schema 1: `output` becomes `artifacts` with its value kept (directories
+ * are never moved); missing `instructions`/`references` get the defaults.
+ */
+function pathsV1(v: unknown): PathsConfig {
+  const p = table(v, "paths", ["instructions", "references", "output"]);
+  const d = defaultLayout();
+  return {
+    instructions: opt(p, "instructions", "paths", rel) ?? d.instructions,
+    artifacts: req(p, "output", "paths", rel),
+    references: opt(p, "references", "paths", rel) ?? RelPath.unchecked(DEFAULT_REFERENCES_DIR),
+  };
+}
+
+/** Schema 2: an absent optional key means that path is disabled. */
+function pathsV2(v: unknown): PathsConfig {
+  const p = table(v, "paths", ["instructions", "artifacts", "docs", "references"]);
+  return compact({
+    instructions: req(p, "instructions", "paths", rel),
+    artifacts: opt(p, "artifacts", "paths", rel),
+    docs: opt(p, "docs", "paths", rel),
+    references: opt(p, "references", "paths", rel),
+  });
+}
+
 export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
   file: CONFIG_FILE,
   format: "toml",
 
-  decode(doc) {
+  decode(doc, version) {
     const o = table(doc, "root", [
       "schema_version",
       "paths",
@@ -285,23 +326,15 @@ export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
       "sources",
       "skills",
     ]);
-    const paths = table(
-      req(o, "paths", "root", (v) => v),
-      "paths",
-      ["instructions", "references", "output"],
-    );
+    const rawPaths = req(o, "paths", "root", (v) => v);
     const backlog = table(
       req(o, "backlog", "root", (v) => v),
       "backlog",
       ["enabled", "path"],
     );
     return {
-      schemaVersion: req(o, "schema_version", "root", u32),
-      paths: {
-        instructions: opt(paths, "instructions", "paths", rel) ?? defaultLayout().instructions,
-        references: req(paths, "references", "paths", rel),
-        output: req(paths, "output", "paths", rel),
-      },
+      schemaVersion: SCHEMA_VERSION,
+      paths: version === 1 ? pathsV1(rawPaths) : pathsV2(rawPaths),
       backlog: {
         enabled: req(backlog, "enabled", "backlog", bool),
         path: req(backlog, "path", "backlog", rel),
@@ -352,11 +385,12 @@ export const HARNESS_CONFIG: ContractSpec<HarnessConfig> = {
   encode(c) {
     return {
       schema_version: c.schemaVersion,
-      paths: {
+      paths: compact({
         instructions: c.paths.instructions.toString(),
-        references: c.paths.references.toString(),
-        output: c.paths.output.toString(),
-      },
+        artifacts: c.paths.artifacts?.toString(),
+        docs: c.paths.docs?.toString(),
+        references: c.paths.references?.toString(),
+      }),
       backlog: { enabled: c.backlog.enabled, path: c.backlog.path.toString() },
       agents: c.agents.map((a) => ({ id: a.id, placement: a.placement })),
       sources: c.sources.map((s) =>
@@ -471,7 +505,7 @@ export const HARNESS_LOCK: ContractSpec<HarnessLock> = {
   decode(doc) {
     const o = table(doc, "root", ["schema_version", "skills"]);
     return {
-      schemaVersion: req(o, "schema_version", "root", u32),
+      schemaVersion: SCHEMA_VERSION, // version 1 is upgraded in memory
       skills:
         opt(
           o,
@@ -610,7 +644,7 @@ export const HARNESS_STATE: ContractSpec<HarnessState> = {
       "adapters",
     ]);
     return compact({
-      schemaVersion: req(o, "schema_version", "root", u32),
+      schemaVersion: SCHEMA_VERSION, // version 1 is upgraded in memory
       lastSuccess: opt(o, "last_success", "root", (v, at) => {
         const r = table(v, at, ["id", "at", "tool_version"]);
         return {

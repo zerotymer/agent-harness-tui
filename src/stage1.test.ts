@@ -52,7 +52,8 @@ function config(): HarnessConfig {
   c.skills = [{ id: "review", source: "local", reference: "review" }];
   // Spaces and Korean in configurable paths.
   c.paths.references = RelPath.parse("docs/참조 문서");
-  c.paths.output = RelPath.parse(".산출물");
+  c.paths.artifacts = RelPath.parse(".산출물");
+  delete c.paths.docs; // `docs/참조 문서` would nest inside it
   return c;
 }
 
@@ -127,7 +128,7 @@ test("re-run keeps config and path resolution", async () => {
   const loaded = init.load(p.root());
   assert.deepEqual(loaded.config, config());
   assert.equal(
-    p.root().abs(loaded.config!.paths.references),
+    p.root().abs(loaded.config!.paths.references!),
     path.join(p.root().path, "docs", "참조 문서"),
   );
   const toml = p.read("harness.toml");

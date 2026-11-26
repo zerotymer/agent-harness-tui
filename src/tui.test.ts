@@ -106,7 +106,7 @@ test("cancel, back, Esc and q never write", async () => {
   await press(w, "enter");
   await typed(w, "q");
   assert.ok(!w.quit);
-  assert.equal(w.references, "referencesq");
+  assert.equal(w.instructions, "instructionsq");
   // The last row (backlog toggle) is not an input: `q` quits.
   await press(w, "up");
   await typed(w, "q");
@@ -114,31 +114,57 @@ test("cancel, back, Esc and q never write", async () => {
   assert.equal(p.files(), 0);
 });
 
-test("Korean path input and validation", async () => {
+test("Korean path input, any name, duplicates rejected", async () => {
   using p = project();
   const w = await p.wizard();
   await press(w, "enter");
+  await press(w, "down", 3); // references
   await press(w, "backspace", "references".length);
   await typed(w, "참조 문서");
   assert.match(screen(w), /참조 문서/);
-  // Output without a leading dot is rejected and the step stays.
-  await press(w, "down");
-  await press(w, "backspace", ".output".length);
-  await typed(w, "out");
+  // Artifacts with any name; a duplicate of another path is rejected.
+  await press(w, "up", 2);
+  await press(w, "backspace", ".artifacts".length);
+  await typed(w, "참조 문서");
   await press(w, "enter");
   assert.equal(w.step, "paths");
-  assert.match(w.message ?? "", /dot-prefixed/);
-  await press(w, "backspace", 3);
-  await typed(w, ".산출물");
+  assert.match(w.message ?? "", /same destination/);
+  await press(w, "backspace", "참조 문서".length);
+  await typed(w, "산출물");
   await press(w, "enter");
   assert.equal(w.step, "skills");
+  assert.equal(w.config().paths.artifacts?.toString(), "산출물", "no dot needed");
+});
+
+test("empty optional paths are disabled: not created, ignored or mentioned", async () => {
+  using p = project();
+  const w = await p.wizard();
+  await press(w, "enter");
+  await press(w, "down"); // artifacts
+  await press(w, "backspace", ".artifacts".length);
+  await press(w, "down"); // docs
+  await press(w, "backspace", "docs".length);
+  assert.match(screen(w), /산출물\(문서\): {6}▏/);
+  await press(w, "up", 2); // instructions cannot be empty
+  await press(w, "backspace", "instructions".length);
+  await press(w, "enter");
+  assert.equal(w.step, "paths");
+  assert.match(w.message ?? "", /비울 수 없습니다/);
+  await typed(w, "instructions");
+  await press(w, "enter", 3);
+  assert.equal(w.step, "done");
+  assert.ok(!fs.existsSync(p.abs(".artifacts")) && !fs.existsSync(p.abs("docs")));
+  assert.ok(fs.existsSync(p.abs("references/.gitkeep")));
+  assert.ok(!p.read(".gitignore").includes("artifacts"));
+  assert.ok(!p.read("CLAUDE.md").includes("docs/"));
+  const toml = p.read("harness.toml");
+  assert.ok(!toml.includes("artifacts") && !toml.includes('docs = "'), toml);
 });
 
 test("custom instructions dir is validated and applied", async () => {
   using p = project();
   const w = await p.wizard();
   await press(w, "enter");
-  await press(w, "down", 2);
   const retype = async (text: string) => {
     await press(w, "backspace", [...w.instructions].length);
     await typed(w, text);
@@ -152,14 +178,14 @@ test("custom instructions dir is validated and applied", async () => {
   assert.equal(w.step, "paths");
   assert.match(w.message ?? "", /지시서 경로/);
 
-  await retype("docs/tasks");
+  await retype("work/tasks");
   await press(w, "enter", 3);
   assert.equal(w.step, "done");
-  assert.ok(fs.statSync(p.abs("docs/tasks/.completed")).isDirectory());
-  assert.ok(fs.statSync(p.abs("docs/tasks/completed.log")).isFile());
+  assert.ok(fs.statSync(p.abs("work/tasks/.completed")).isDirectory());
+  assert.ok(fs.statSync(p.abs("work/tasks/completed.log")).isFile());
   assert.ok(!fs.existsSync(p.abs("instructions")));
-  assert.match(p.read("harness.toml"), /instructions = "docs\/tasks"/);
-  assert.ok(p.read("CLAUDE.md").includes("`docs/tasks/completed.log`"));
+  assert.match(p.read("harness.toml"), /instructions = "work\/tasks"/);
+  assert.ok(p.read("CLAUDE.md").includes("`work/tasks/completed.log`"));
 });
 
 test("backlog creates db and scripts and keeps an existing db", async () => {

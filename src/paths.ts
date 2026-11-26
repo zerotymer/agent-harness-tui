@@ -15,7 +15,8 @@ export const SKILLS_DIR = ".skills";
 /** Backlog file name inside the instruction root. */
 export const BACKLOG_FILE = "agent.db";
 export const DEFAULT_REFERENCES_DIR = "references";
-export const DEFAULT_OUTPUT_DIR = ".output";
+export const DEFAULT_ARTIFACTS_DIR = ".artifacts";
+export const DEFAULT_DOCS_DIR = "docs";
 
 export type PathErrorKind =
   | "empty"
@@ -30,9 +31,7 @@ export type PathErrorKind =
   /** One managed path is nested inside another. Paths: [outer, inner]. */
   | "nested"
   /** An existing filesystem entry has the wrong kind. */
-  | "collision"
-  /** Output directory names must start with a dot. */
-  | "output-not-dot-prefixed";
+  | "collision";
 
 export class PathError extends Error {
   readonly kind: PathErrorKind;
@@ -61,8 +60,6 @@ function describe(kind: PathErrorKind, [a = "", b = ""]: string[]): string {
       return `\`${b}\` is nested inside managed path \`${a}\``;
     case "collision":
       return `\`${a}\` collides with an existing entry`;
-    case "output-not-dot-prefixed":
-      return `output directory \`${a}\` must have a dot-prefixed name`;
   }
 }
 
@@ -230,19 +227,30 @@ function canonicalizeExisting(p: string): string {
 
 export type EntryKind = "dir" | "file";
 
-/** Stage 1 managed layout. Fixed entries are not configurable. */
+/**
+ * Managed layout (Stage 2 spec §4). `instructions` is required; an
+ * undefined optional path is disabled: not created, not ignored, not
+ * mentioned in guidance. `.skills/` is fixed.
+ */
 export interface Layout {
   instructions: RelPath;
-  references: RelPath;
-  output: RelPath;
+  /** Temporary artifacts, ignored by Git. */
+  artifacts?: RelPath;
+  /** Documents the user publishes, tracked. */
+  docs?: RelPath;
+  /** Documents for agents, tracked. */
+  references?: RelPath;
   backlogEnabled: boolean;
 }
+
+export const OPTIONAL_PATHS = ["artifacts", "docs", "references"] as const;
 
 export function defaultLayout(): Layout {
   return {
     instructions: RelPath.unchecked(DEFAULT_INSTRUCTIONS_DIR),
+    artifacts: RelPath.unchecked(DEFAULT_ARTIFACTS_DIR),
+    docs: RelPath.unchecked(DEFAULT_DOCS_DIR),
     references: RelPath.unchecked(DEFAULT_REFERENCES_DIR),
-    output: RelPath.unchecked(DEFAULT_OUTPUT_DIR),
     backlogEnabled: false,
   };
 }
@@ -252,25 +260,24 @@ export const completedLog = (l: Layout) => l.instructions.join("completed.log");
 export const backlogPath = (l: Layout) => l.instructions.join(BACKLOG_FILE);
 export const skillsDir = () => RelPath.unchecked(SKILLS_DIR);
 
-/** Top-level managed entries that must not overlap. */
+/** Top-level managed entries (enabled ones only) that must not overlap. */
 export function layoutEntries(l: Layout): [RelPath, EntryKind][] {
-  return [
-    [l.instructions, "dir"],
-    [l.references, "dir"],
-    [l.output, "dir"],
-    [skillsDir(), "dir"],
-  ];
+  const out: [RelPath, EntryKind][] = [[l.instructions, "dir"]];
+  for (const k of OPTIONAL_PATHS) {
+    const p = l[k];
+    if (p) out.push([p, "dir"]);
+  }
+  out.push([skillsDir(), "dir"]);
+  return out;
 }
 
 /**
- * Checks dot prefix, duplicates, nesting and collisions with existing
- * entries. Returns every problem, not just the first; empty means valid.
+ * Checks duplicates, nesting and collisions with existing entries. No name
+ * format is enforced (issue #36). Returns every problem, not just the
+ * first; empty means valid.
  */
 export function validateLayout(l: Layout, root: ProjectRoot): PathError[] {
   const errors: PathError[] = [];
-  if (!l.output.fileName().startsWith(".")) {
-    errors.push(new PathError("output-not-dot-prefixed", l.output.toString()));
-  }
   const entries = layoutEntries(l);
   entries.forEach(([a], i) => {
     for (const [b] of entries.slice(i + 1)) {

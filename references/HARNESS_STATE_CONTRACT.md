@@ -1,6 +1,6 @@
 # Harness config, lock and state contract
 
-Schema version: **2** (Stage 2, 2026-11-24). Version 1 is still read (see Common rules). Implemented in `src/contract.rs` (instruction 0003). It covers what the TUI writes into a **target project**, as described in the Stage 1 spec §3 and the [Stage 2 spec](STEP_2_SETUP_FLOW.md). It is not this repository's own configuration.
+Schema version: **2** (Stage 2, 2026-11-24). Version 1 is still read (see Common rules). Implemented in `src/contract.ts` (instruction 0003). It covers what the TUI writes into a **target project**, as described in the Stage 1 spec §3 and the [Stage 2 spec](STEP_2_SETUP_FLOW.md). It is not this repository's own configuration.
 
 | File | Role | Git |
 | --- | --- | --- |

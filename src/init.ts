@@ -2,6 +2,7 @@
 // combines every module into one plan, so the TUI can preview and apply it
 // in a single explicit step. No terminal code here.
 
+import fs from "node:fs";
 import * as apply from "./apply.js";
 import { type AgentEntry, builtinAgents } from "./catalog.js";
 import {
@@ -106,7 +107,15 @@ export async function prepare(
   }
 
   const [dirs, desired] = await guidance.planItems(root, config, agents);
-  dirs.push(config.paths.references, config.paths.output);
+  const { artifacts, docs, references } = config.paths;
+  for (const d of [docs, references, artifacts]) if (d) dirs.push(d);
+  // Git keeps no empty directories: a new tracked directory gets an empty,
+  // create-only `.gitkeep`. Existing directories and ignored ones get none.
+  for (const d of dirs) {
+    if ((!artifacts || !d.equals(artifacts)) && !fs.existsSync(root.abs(d))) {
+      desired.push(apply.createOnly(d.join(".gitkeep"), ""));
+    }
+  }
   desired.push(...imported);
 
   const placed = placement.planPlacement(root, config, lock, loaded.state, imported, agents);
@@ -135,9 +144,13 @@ export function applyPrepared(
   state: HarnessState,
 ): [apply.ApplyReport, HiddenAttr] {
   const report = apply.apply(root, prepared.plan, state);
+  // Only a new artifacts directory whose name starts with `.`; a failure is
+  // information, never an apply failure.
+  const artifacts = prepared.config.paths.artifacts;
+  const created = prepared.plan.dirs.some(([d, existed]) => !existed && artifacts?.equals(d));
   const hidden: HiddenAttr =
-    report.failed === undefined
-      ? applyHiddenAttribute(root.abs(prepared.config.paths.output))
+    report.failed === undefined && artifacts && created && artifacts.fileName().startsWith(".")
+      ? applyHiddenAttribute(root.abs(artifacts))
       : { kind: "not-applicable" };
   return [report, hidden];
 }
